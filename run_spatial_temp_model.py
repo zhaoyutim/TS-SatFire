@@ -110,14 +110,14 @@ if __name__=='__main__':
     image_size = (ts_length, 256, 256)
     patch_size = (1, 2, 2)
     window_size = (ts_length, 4, 4)
-    if model_name == 'unet':
-        model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+    if model_name == 'unet3d':
+        model = UNet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
     elif model_name == 'attunet':
-        model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
-    elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256), spatial_dims=2, norm_name='batch')
-    elif model_name == 'swinunetr2d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256), spatial_dims=2, norm_name='batch')
+        model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+    elif model_name == 'unetr3d':
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256, ts_length), spatial_dims=3, norm_name='batch')
+    elif model_name == 'swinunetr3d':
+        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256, 256, ts_length), spatial_dims=3, norm_name='batch')
     else:
         raise 'not implemented'
     
@@ -142,9 +142,6 @@ if __name__=='__main__':
             for i, batch in enumerate(train_bar):
                 data_batch = batch['data']
                 labels_batch = batch['labels']
-                b, c, t, w, h = data_batch.shape
-                data_batch = torch.reshape(data_batch, (b*t, c, w, h))
-                labels_batch = torch.reshape(labels_batch, (b*t, num_classes, w, h))
                 data_batch = data_batch.to(device)
                 labels_batch = labels_batch.to(torch.long).to(device)
 
@@ -173,9 +170,6 @@ if __name__=='__main__':
             for j, batch in enumerate(val_bar):
                 val_data_batch = batch['data']
                 val_labels_batch = batch['labels']
-                b, c, t, w, h = val_data_batch.shape
-                val_data_batch = torch.reshape(val_data_batch, (b*t, c, w, h))
-                val_labels_batch = torch.reshape(val_labels_batch, (b*t, num_classes, w, h))
                 val_data_batch = val_data_batch.to(device)
                 val_labels_batch = val_labels_batch.to(torch.long).to(device)
 
@@ -284,56 +278,57 @@ if __name__=='__main__':
                 import matplotlib.pyplot as plt
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):
-                    output_stack = np.logical_or(output_stack, outputs[k, 1, :, :]>0.5)
-                    label = test_labels_batch[k, 1, :, :]>0
-                    label = label.numpy()
+                    for i in range(ts_length):
+                        output_stack = np.logical_or(output_stack, outputs[k, 1, i, :, :]>0.5)
+                        label = test_labels_batch[k, 1, i, :, :]>0
+                        label = label.numpy()
 
-                    f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
-                    f1 += f1_ts
-                    iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
-                    iou += iou_ts
+                        f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
+                        f1 += f1_ts
+                        iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
+                        iou += iou_ts
 
-                    # f, axarr = plt.subplots(2, 2)
-                    # axarr[0,0].imshow(output_stack)
-                    # axarr[0,0].set_title('Prediction')
-                    # axarr[0,0].axis('off')
+                        # f, axarr = plt.subplots(2, 2)
+                        # axarr[0,0].imshow(output_stack)
+                        # axarr[0,0].set_title('Prediction')
+                        # axarr[0,0].axis('off')
 
-                    # axarr[0,1].imshow(label)
-                    # axarr[0,1].set_title('Ground Truth')
-                    # axarr[0,1].axis('off')
+                        # axarr[0,1].imshow(label)
+                        # axarr[0,1].set_title('Ground Truth')
+                        # axarr[0,1].axis('off')
 
-                    # if n_channel!=6:
-                    #     axarr[1, 0].imshow(normalization(test_data_batch[k, 3, i, :, :]))
-                    #     axarr[1, 0].set_title('VIIRS I4 Day')
-                    #     axarr[1, 0].axis('off')
+                        # if n_channel!=6:
+                        #     axarr[1, 0].imshow(normalization(test_data_batch[k, 3, i, :, :]))
+                        #     axarr[1, 0].set_title('VIIRS I4 Day')
+                        #     axarr[1, 0].axis('off')
 
-                    #     axarr[1, 1].imshow(normalization(test_data_batch[k, 6, i, :, :]))
-                    #     axarr[1, 1].set_title('VIIRS I4 Night')
-                    #     axarr[1, 1].axis('off')
-                    # else:
-                    #     axarr[1, 0].imshow(normalization(test_data_batch[k, 1, i, :, :]))
-                    #     axarr[1, 0].set_title('VIIRS I4 Day')
-                    #     axarr[1, 0].axis('off')
-                        
-                    #     axarr[1, 1].imshow(normalization(test_data_batch[k, 4, i, :, :]))
-                    #     axarr[1, 1].set_title('VIIRS I4 Night')
-                    #     axarr[1, 1].axis('off')
-                    plt.imshow(normalization(test_data_batch[k, 3, :, :]), cmap='Greys')
-                    img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
-                    img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
-                    img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
-                    img_tp[img_tp==0.]=np.nan
-                    img_fp[img_fp==0.]=np.nan
-                    img_fn[img_fn==0.]=np.nan
+                        #     axarr[1, 1].imshow(normalization(test_data_batch[k, 6, i, :, :]))
+                        #     axarr[1, 1].set_title('VIIRS I4 Night')
+                        #     axarr[1, 1].axis('off')
+                        # else:
+                        #     axarr[1, 0].imshow(normalization(test_data_batch[k, 1, i, :, :]))
+                        #     axarr[1, 0].set_title('VIIRS I4 Day')
+                        #     axarr[1, 0].axis('off')
+                            
+                        #     axarr[1, 1].imshow(normalization(test_data_batch[k, 4, i, :, :]))
+                        #     axarr[1, 1].set_title('VIIRS I4 Night')
+                        #     axarr[1, 1].axis('off')
+                        plt.imshow(normalization(test_data_batch[k, 3, i, :, :]), cmap='Greys')
+                        img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
+                        img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
+                        img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
+                        img_tp[img_tp==0.]=np.nan
+                        img_fp[img_fp==0.]=np.nan
+                        img_fn[img_fn==0.]=np.nan
 
-                    plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
-                    plt.imshow(img_fp, cmap='summer', interpolation='nearest')
-                    plt.imshow(img_fn, cmap='brg', interpolation='nearest')
-                    plt.axis('off')
+                        plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
+                        plt.imshow(img_fp, cmap='summer', interpolation='nearest')
+                        plt.imshow(img_fn, cmap='brg', interpolation='nearest')
+                        plt.axis('off')
 
-                    plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, n_channel), bbox_inches='tight')
-                    plt.show()
-                    plt.close()
+                        plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{ts}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel), bbox_inches='tight')
+                        plt.show()
+                        plt.close()
             iou_all += iou/length
             f1_all += f1/length
             print('ID{} IoU Score of the whole TS:{}'.format(id, iou/length))

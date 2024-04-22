@@ -1,8 +1,9 @@
+import argparse
 import pandas as pd
 
 from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor
 dfs = []
-for year in ['2018','2019','2020']:
+for year in ['2017', '2018', '2019', '2020']:
 # for year in ['2021']:
     filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
     df = pd.read_csv(filename)
@@ -32,24 +33,30 @@ val_ids = val_df['Id'].values.astype(str)
 df_test = df_test.sort_values(by=['Id'])
 test_ids = df_test['Id'].values.astype(str)
 if __name__ == '__main__':
-    ts_length = 6
-    interval = 3
-    modes = 'val'
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('-mode', type=str, help='Train/Val/Test')
+    parser.add_argument('-ts', type=int, help='Length of TS')
+    parser.add_argument('-it', type=int, help='Interval')
+    parser.add_argument('-uc', type=str, help='use case')
+    args = parser.parse_args()
+    ts_length = args.ts
+    interval = args.it
+    modes = args.mode
     if modes == 'train':
         locations = train_ids
     elif modes == 'val':
         locations = val_ids
     else:
         locations = test_ids
-    usecase='af'
+    usecase=args.uc
     satimg_processor = AFBADatasetProcessor()
     # satimg_processor.dataset_generator_seqtoseq(mode=modes, usecase=usecase, locations=locations, visualize=True, 
     #                                             file_name=usecase+'_'+modes+'_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
     #                                             label_name=usecase+'_'+modes+'_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
     #                                             save_path = 'dataset/dataset_'+modes, ts_length=ts_length, 
     #                                             interval=interval, image_size=(256, 256))
-    ids = ['donnie_creek', 'slave_lake']
-    for id in ids:
+    # ids = ['donnie_creek', 'slave_lake']
+    for id in locations:
         print(id)
         satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                            save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))

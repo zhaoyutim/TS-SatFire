@@ -28,14 +28,14 @@ class AFBADatasetProcessor(SatProcessingUtils):
             array_stack = []
             label_stack = []
 
-            if mode == 'train' or mode == 'val':
-                output_shape_x = 256
-                output_shape_y = 256
-                offset=128
-            else:
-                output_shape_x = array_day.shape[1]
-                output_shape_y = array_day.shape[2]
-                offset=0
+            # if mode == 'train' or mode == 'val':
+            output_shape_x = 256
+            output_shape_y = 256
+            offset=128
+            # else:
+            #     output_shape_x = array_day.shape[1]
+            #     output_shape_y = array_day.shape[2]
+            #     offset=0
             
             original_shape_x = array_day.shape[1]
             original_shape_y = array_day.shape[2]

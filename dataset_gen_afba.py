@@ -50,13 +50,15 @@ if __name__ == '__main__':
         locations = test_ids
     usecase=args.uc
     satimg_processor = AFBADatasetProcessor()
-    # satimg_processor.dataset_generator_seqtoseq(mode=modes, usecase=usecase, locations=locations, visualize=True, 
-    #                                             file_name=usecase+'_'+modes+'_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
-    #                                             label_name=usecase+'_'+modes+'_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
-    #                                             save_path = 'dataset/dataset_'+modes, ts_length=ts_length, 
-    #                                             interval=interval, image_size=(256, 256))
-    # ids = ['donnie_creek', 'slave_lake']
-    for id in locations:
-        print(id)
-        satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
-                                                           save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
+    if modes == 'train' or modes == 'val':
+        satimg_processor.dataset_generator_seqtoseq(mode=modes, usecase=usecase, locations=locations, visualize=True, 
+                                                    file_name=usecase+'_'+modes+'_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
+                                                    label_name=usecase+'_'+modes+'_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
+                                                    save_path = 'dataset/dataset_'+modes, ts_length=ts_length, 
+                                                    interval=interval, image_size=(256, 256))
+    else:
+        # ids = ['donnie_creek', 'slave_lake']
+        for id in locations:
+            print(id)
+            satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
+                                                            save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))

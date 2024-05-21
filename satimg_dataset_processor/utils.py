@@ -59,3 +59,13 @@ class SatProcessingUtils:
             src.close()
 
         return mosaic, out_meta
+    
+    def tokenizing(self, data_path, window_size):
+        array = np.load(data_path).transpose((0, 3, 4, 1, 2))
+        return array
+
+    def flatten_window(self, array, window_size):
+        output_array = np.zeros((array.shape[2], (array.shape[3])*pow(window_size,2)))
+        for time in range(array.shape[2]):
+            output_array[time, :] = array[:, :, time, :].flatten('F')
+        return output_array

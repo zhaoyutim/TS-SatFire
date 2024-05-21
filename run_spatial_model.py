@@ -9,7 +9,9 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 from monai.losses.dice import DiceLoss
 from monai.metrics import MeanIoU, DiceMetric
+from monai.data import ArrayDataset, create_test_image_2d, decollate_batch, DataLoader
 from monai.networks.nets import UNet, AttentionUnet, UNETR, SwinUNETR
+from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveImage, ScaleIntensity
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -88,15 +90,16 @@ if __name__=='__main__':
                 sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
             return sample
 
-    transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
-        std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
+    transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
+        std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
+
 
 
     # Dataloader
     if not train:
         wandb_config(model_name, num_heads, hidden_size, batch_size)
-        image_path = os.path.join(root_path, 'dataset_train/dataset_train'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        label_path = os.path.join(root_path, 'dataset_train/dataset_train'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
@@ -107,17 +110,17 @@ if __name__=='__main__':
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    image_size = (ts_length, 256, 256)
-    patch_size = (1, 2, 2)
-    window_size = (ts_length, 4, 4)
+    image_size = (256, 256)
+    # patch_size = (1, 2, 2)
+    # window_size = (ts_length, 4, 4)
     if model_name == 'unet':
-        model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+        model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'attunet':
-        model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+        model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256), spatial_dims=2, norm_name='batch')
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=48)
     elif model_name == 'swinunetr2d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256), spatial_dims=2, norm_name='batch')
+        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=48)
     else:
         raise 'not implemented'
     
@@ -125,10 +128,10 @@ if __name__=='__main__':
     model.to(device)
 
     summary(model, (n_channel, 256, 256), batch_dim=0, device=device)
-    criterion = DiceLoss(reduction='mean', sigmoid=True)
+    criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
     mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
     dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-
+    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scaler = GradScaler()
     model.to(device)
@@ -142,9 +145,9 @@ if __name__=='__main__':
             for i, batch in enumerate(train_bar):
                 data_batch = batch['data']
                 labels_batch = batch['labels']
-                b, c, t, w, h = data_batch.shape
-                data_batch = torch.reshape(data_batch, (b*t, c, w, h))
-                labels_batch = torch.reshape(labels_batch, (b*t, num_classes, w, h))
+                b, c, w, h = data_batch.shape
+                data_batch = torch.reshape(data_batch, (b, c, w, h))
+                labels_batch = torch.reshape(labels_batch, (b, num_classes, w, h))
                 data_batch = data_batch.to(device)
                 labels_batch = labels_batch.to(torch.long).to(device)
 
@@ -173,22 +176,22 @@ if __name__=='__main__':
             for j, batch in enumerate(val_bar):
                 val_data_batch = batch['data']
                 val_labels_batch = batch['labels']
-                b, c, t, w, h = val_data_batch.shape
-                val_data_batch = torch.reshape(val_data_batch, (b*t, c, w, h))
-                val_labels_batch = torch.reshape(val_labels_batch, (b*t, num_classes, w, h))
+                b, t, w, h = val_data_batch.shape
+                val_data_batch = torch.reshape(val_data_batch, (b, c, w, h))
+                val_labels_batch = torch.reshape(val_labels_batch, (b, num_classes, w, h))
                 val_data_batch = val_data_batch.to(device)
                 val_labels_batch = val_labels_batch.to(torch.long).to(device)
 
                 outputs = model(val_data_batch)
                 loss = criterion(outputs, val_labels_batch)
+                
+                outputs = [post_trans(i) for i in decollate_batch(outputs)]
+                val_labels_batch = decollate_batch(val_labels_batch)
 
                 val_loss += loss.detach().item() * val_data_batch.size(0)
-                mean_iou(outputs, val_labels_batch)
-                dice_metric(y_pred=outputs, y=val_labels_batch)
-                iou_values.append(mean_iou.aggregate().item())
-                dice_values.append(dice_metric.aggregate().item())
-                dice_metric.reset()
-                mean_iou.reset()
+                iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
+                dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
+
                 val_bar.set_description(
                     f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
 
@@ -199,7 +202,7 @@ if __name__=='__main__':
             print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
             # Save the top N model checkpoints based on validation loss
-            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]:
+            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=150:
                 save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
                 if len(best_checkpoints) == top_n_checkpoints:
@@ -254,7 +257,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 196
+            load_epoch = 7
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -276,11 +279,14 @@ if __name__=='__main__':
             for j, batch in enumerate(test_dataloader):
                 test_data_batch = batch['data']
                 test_labels_batch = batch['labels']
-                b, c, t, w, h = test_data_batch.shape
-                test_data_batch = torch.reshape(test_data_batch, (b*t, c, w, h))
-                test_labels_batch = torch.reshape(test_labels_batch, (b*t, num_classes, w, h))
+                b, c, w, h = test_data_batch.shape
+                test_data_batch = torch.reshape(test_data_batch, (b, c, w, h))
+                test_labels_batch = torch.reshape(test_labels_batch, (b, num_classes, w, h))
 
-                outputs = model(test_data_batch.to(device)).cpu().detach().numpy()
+                outputs = model(test_data_batch.to(device))
+                outputs = [post_trans(i) for i in decollate_batch(outputs)]
+                outputs = np.stack(outputs, axis=0)
+
                 import matplotlib.pyplot as plt
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):

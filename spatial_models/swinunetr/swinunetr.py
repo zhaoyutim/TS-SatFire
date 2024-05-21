@@ -230,7 +230,7 @@ class SwinUNETR(nn.Module):
                 in_channels  = feature_size,
                 out_channels = out_channels
             ),
-            nn.Sigmoid()
+            # nn.Sigmoid()
             # nn.Softmax()
         )
 

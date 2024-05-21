@@ -99,6 +99,8 @@ if __name__=='__main__':
     parser.add_argument('-md', type=int, help='mlp-dimension')
     parser.add_argument('-ed', type=int, help='embedding dimension')
     parser.add_argument('-nl', type=int, help='num_layers')
+
+    parser.add_argument('-test', dest='binary_flag', action='store_true', help='embedding dimension')
     args = parser.parse_args()
     model_name = args.m
     mode = args.mode
@@ -117,9 +119,9 @@ if __name__=='__main__':
     learning_rate = lr
     weight_decay = lr / 10
     num_classes=2
+    train = args.binary_flag
 
     input_shape=(ts_length, nchannel)
-    # train_dataset, val_dataset, steps_per_epoch, validation_steps = get_dateset(mode, ts_length, interval, nchannel, batch_size)
     data_gen_train = FireDataGenerator(mode, train_test='train', ts_length=ts_length, interval=interval, batch_size=batch_size, input_shape=input_shape, n_channels=nchannel, n_classes=num_classes)
     data_gen_val = FireDataGenerator(mode, train_test='val', ts_length=ts_length, interval=interval, batch_size=batch_size, input_shape=input_shape, n_channels=nchannel, n_classes=num_classes)
     steps_per_epoch = len(data_gen_train)
@@ -182,54 +184,41 @@ if __name__=='__main__':
                 
             ],
         )
-    # train_dataset = tf.data.Dataset.from_generator(data_gen_train, (tf.float32, tf.int16))
-    # val_dataset = tf.data.Dataset.from_generator(data_gen_val, (tf.float32, tf.int16))
-    # options = tf.data.Options()
-    # options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-    # train_dataset = train_dataset.with_options(options)
-    # val_dataset = val_dataset.with_options(options)
-    # print('training in progress')
-    # history = model.fit(
-    #     x=data_gen_train,
-    #     steps_per_epoch=steps_per_epoch,
-    #     validation_data=data_gen_val,
-    #     validation_steps=validation_steps,
-    #     epochs=MAX_EPOCHS,
-    #     callbacks=[WandbCallback()]
-    # )
-    # model.save(os.path.join('saved_models', 'afba_'+model_name+'mode' + str(mode) + '_nopretrained'+'_run'+str(run)+'_'+str(num_heads)+'_'+str(mlp_dim)+'_'+str(hidden_size)+'_'+str(num_layers)+'_'+str(batch_size)+'_'+str(is_masked)+'way2'))
-    for epoch in range(MAX_EPOCHS):
-        start_time = time.time()
-        print("\nStart of epoch %d" % (epoch,))
-        for step, (x_batch_train, y_batch_train) in enumerate(data_gen_train):
-            b, h, w, t, c = x_batch_train.shape[0], x_batch_train.shape[1], x_batch_train.shape[2], x_batch_train.shape[3], x_batch_train.shape[4]
-            x_batch_train = tf.reshape(x_batch_train, (b*h*w, t, c))
-            with tf.GradientTape() as tape:
-                logits = model(x_batch_train, training=True)
-                logits = tf.reshape(logits, (b, h, w, t, c))
-                loss_value = loss_fn(y_batch_train, logits)
-            grads = tape.gradient(loss_value, model.trainable_weights)
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
-            train_acc_metric.update_state(y_batch_train, logits)
+    if not train:
+        model.load_weights(os.path.join('saved_models', 'afba_'+model_name+'mode' + str(mode) + '_nopretrained'+'_run'+str(run)+'_'+str(num_heads)+'_'+str(mlp_dim)+'_'+str(hidden_size)+'_'+str(num_layers)+'_'+str(batch_size)+'_'+str(is_masked)+'way2'))
+    else:
+        for epoch in range(MAX_EPOCHS):
+            start_time = time.time()
+            print("\nStart of epoch %d" % (epoch,))
+            for step, (x_batch_train, y_batch_train) in enumerate(data_gen_train):
+                b, h, w, t, c = x_batch_train.shape[0], x_batch_train.shape[1], x_batch_train.shape[2], x_batch_train.shape[3], x_batch_train.shape[4]
+                x_batch_train = tf.reshape(x_batch_train, (b*h*w, t, c))
+                with tf.GradientTape() as tape:
+                    logits = model(x_batch_train, training=True)
+                    logits = tf.reshape(logits, (b, h, w, t, c))
+                    loss_value = loss_fn(y_batch_train, logits)
+                grads = tape.gradient(loss_value, model.trainable_weights)
+                optimizer.apply_gradients(zip(grads, model.trainable_weights))
+                train_acc_metric.update_state(y_batch_train, logits)
 
-            if step % 10 == 0:
-                print(
-                    "Training loss (for one batch) at step %d: %.4f"
-                    % (step, float(loss_value))
-                )
-                print("Seen so far: %s samples" % ((step + 1) * batch_size))
-            
-        train_acc = train_acc_metric.result()
-        print("Training acc over epoch: %.4f" % (float(train_acc),))
+                if step % 10 == 0:
+                    print(
+                        "Training loss (for one batch) at step %d: %.4f"
+                        % (step, float(loss_value))
+                    )
+                    print("Seen so far: %s samples" % ((step + 1) * batch_size))
+                
+            train_acc = train_acc_metric.result()
+            print("Training acc over epoch: %.4f" % (float(train_acc),))
 
-        train_acc_metric.reset_states()
+            train_acc_metric.reset_states()
 
-        for x_batch_val, y_batch_val in data_gen_val:
-            b, h, w, t, c = x_batch_val.shape[0], x_batch_val.shape[1], x_batch_val.shape[2], x_batch_val.shape[3], x_batch_val.shape[4]
-            val_logits = model(x_batch_val, training=False)
-            val_logits = tf.reshape(val_logits, (b, h, w, t, c))
-            val_acc_metric.update_state(y_batch_val, val_logits)
-        val_acc = val_acc_metric.result()
-        val_acc_metric.reset_states()
-        print("Validation acc: %.4f" % (float(val_acc),))
-        print("Time taken: %.2fs" % (time.time() - start_time))
+            for x_batch_val, y_batch_val in data_gen_val:
+                b, h, w, t, c = x_batch_val.shape[0], x_batch_val.shape[1], x_batch_val.shape[2], x_batch_val.shape[3], x_batch_val.shape[4]
+                val_logits = model(x_batch_val, training=False)
+                val_logits = tf.reshape(val_logits, (b, h, w, t, c))
+                val_acc_metric.update_state(y_batch_val, val_logits)
+            val_acc = val_acc_metric.result()
+            val_acc_metric.reset_states()
+            print("Validation acc: %.4f" % (float(val_acc),))
+            print("Time taken: %.2fs" % (time.time() - start_time))

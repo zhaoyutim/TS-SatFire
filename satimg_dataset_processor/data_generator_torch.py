@@ -13,11 +13,11 @@ class Normalize(object):
 
     def __call__(self, sample):
         for i in range(len(self.mean)):
-            sample[:, i, ...] = (sample[:, i, ...] - self.mean[i]) / self.std[i]
+            sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
         return sample
 
 class FireDataset(Dataset):
-    def __init__(self, image_path, label_path, ts_length=8, transform=None, n_channel=8, label_sel=2):
+    def __init__(self, image_path, label_path, ts_length=8, transform=None, n_channel=8, label_sel=0):
         self.image_path, self.label_path = image_path, label_path
         self.num_samples = np.load(self.image_path).shape[0]
         self.transform = transform
@@ -61,20 +61,21 @@ class FireDataset(Dataset):
         x_array, y_array = img_dataset, y_dataset
         x_array_copy = x_array.copy()
         # convert the data to a PyTorch tensor
-        x = torch.from_numpy(x_array_copy)
-        y = torch.from_numpy(y_array).long()
+        x = torch.squeeze(torch.from_numpy(x_array_copy))
+        y = torch.squeeze(torch.from_numpy(y_array)).long()
+
 
         return x, y
 
 if __name__ == '__main__':
-    root_path = '/geoinfo_vol1/home/z/h/zhao2/CalFireMonitoring'
-    ts_length = 8
-    image_path = os.path.join(root_path, 'data_train_proj5/proj5_train_img_seqtoseq_alll_' + str(ts_length) + '.npy')
-    label_path = os.path.join(root_path, 'data_train_proj5/proj5_train_label_seqtoseq_alll_' + str(ts_length) + '.npy')
-    # transform = Normalize(mean=[-0.02396825, -0.00982363, -0.03872192, -0.04996127, -0.0444024, -0.04294463],
-    #                       std=[0.9622167, 0.9731459, 0.96916544, 0.96462715, 0.9488478, 0.965671])
-    transform = Normalize(mean=[19.13, 25.65, 22.53, 264.53, 257.15, 18.07, 241.96, 240.91],
-                          std=[10.25, 12.63, 12.46, 119.31, 115.99, 12.00, 108.09, 107.48])
-    train_dataset = FireDataset(image_path=image_path, label_path=label_path, transform=transform)
+    root_path = '/home/z/h/zhao2/TS-SatFire/dataset/'
+    mode = 'ba'
+    interval = 3
+    ts_length = 6
+    image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+    label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+    transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
+                        std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
+    train_dataset = FireDataset(image_path=image_path, label_path=label_path, transform=transform, ts_length=ts_length, n_channel=8)
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
     print(next(iter(train_dataloader)).get('data').shape)

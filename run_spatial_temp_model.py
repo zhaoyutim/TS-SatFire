@@ -9,19 +9,23 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 from monai.losses.dice import DiceLoss
 from monai.metrics import MeanIoU, DiceMetric
-from monai.networks.nets import UNet, AttentionUnet, UNETR, SwinUNETR
+from monai.networks.nets import UNet, AttentionUnet, UNETR
+from monai.data import ArrayDataset, create_test_image_2d, decollate_batch, DataLoader
+from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveImage, ScaleIntensity
+from spatial_models.swinunetr.swinunetr import SwinUNETR
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from torchinfo import summary
 from tqdm import tqdm
 import wandb
-from satimg_dataset_processor.data_generator_torch import FireDataset
+from satimg_dataset_processor.data_generator_torch import Normalize,FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import torchvision.transforms as transforms
 import pandas as pd
 
 root_path = '/home/z/h/zhao2/TS-SatFire/dataset/'
+# root_path = '/geoinfo_vol1/home/z/h/zhao2/CalFireMonitoring/'
 
 def wandb_config(model_name, num_heads, hidden_size, batch_size):
     wandb.login()
@@ -78,31 +82,26 @@ if __name__=='__main__':
     top_n_checkpoints = 3
     train = args.binary_flag
 
-    class Normalize(object):
-        def __init__(self, mean, std):
-            self.mean = mean
-            self.std = std
-
-        def __call__(self, sample):
-            for i in range(len(self.mean)):
-                sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
-            return sample
-
-    transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
-        std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
-
+    transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
+        std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
+    # transform = Normalize(mean=[47.041927,53.98012,36.33056,318.13885,308.42276,29.793797,291.0422,288.78125],
+    #                 std=[22.357374,21.575853,14.279626,11.570329,10.646594,14.370376,11.274373,6.923434])
 
     # Dataloader
     if not train:
         wandb_config(model_name, num_heads, hidden_size, batch_size)
-        image_path = os.path.join(root_path, 'dataset_train/dataset_train'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        label_path = os.path.join(root_path, 'dataset_train/dataset_train'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        # image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        # label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        # val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        # val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        image_path = os.path.join(root_path, 'data_train_proj5/proj5_train_img_seqtoseq_alll_' + str(ts_length) + '.npy')
+        label_path = os.path.join(root_path, 'data_train_proj5/proj5_train_label_seqtoseq_alll_' + str(ts_length) + '.npy')
+        val_image_path = os.path.join(root_path, 'data_val_proj5/proj5_val_img_seqtoseql_' + str(ts_length) + '.npy')
+        val_label_path = os.path.join(root_path, 'data_val_proj5/proj5_val_label_seqtoseql_' + str(ts_length) + '.npy')
         train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
-        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -111,24 +110,41 @@ if __name__=='__main__':
     patch_size = (1, 2, 2)
     window_size = (ts_length, 4, 4)
     if model_name == 'unet3d':
-        model = UNet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(3, 3, 3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'attunet':
-        model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2))
+        model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr3d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256,256, ts_length), spatial_dims=3, norm_name='batch')
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size)
     elif model_name == 'swinunetr3d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=(256, 256, ts_length), spatial_dims=3, norm_name='batch')
+        model = SwinUNETR(
+        image_size=image_size,
+        patch_size=patch_size,
+        window_size=window_size,
+        in_channels=n_channel,
+        out_channels=2,
+        depths=(2, 2, 2, 2),
+        num_heads=(num_heads, num_heads, num_heads, num_heads),
+        feature_size=hidden_size,
+        norm_name='batch',
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+        drop_path_rate=0.0,
+        attn_version='v2',
+        normalize=True,
+        use_checkpoint=False,
+        spatial_dims=3
+    )
     else:
         raise 'not implemented'
     
     model = nn.DataParallel(model)
     model.to(device)
 
-    summary(model, (n_channel, 256, 256), batch_dim=0, device=device)
-    criterion = DiceLoss(reduction='mean', sigmoid=True)
+    summary(model, (n_channel, ts_length, 256, 256), batch_dim=0, device=device)
+    criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
     mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
     dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-
+    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scaler = GradScaler()
     model.to(device)
@@ -176,13 +192,13 @@ if __name__=='__main__':
                 outputs = model(val_data_batch)
                 loss = criterion(outputs, val_labels_batch)
 
+                outputs = [post_trans(i) for i in decollate_batch(outputs)]
+                val_labels_batch = decollate_batch(val_labels_batch)
+
                 val_loss += loss.detach().item() * val_data_batch.size(0)
-                mean_iou(outputs, val_labels_batch)
-                dice_metric(y_pred=outputs, y=val_labels_batch)
-                iou_values.append(mean_iou.aggregate().item())
-                dice_values.append(dice_metric.aggregate().item())
-                dice_metric.reset()
-                mean_iou.reset()
+                iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
+                dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
+
                 val_bar.set_description(
                     f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
 
@@ -192,8 +208,9 @@ if __name__=='__main__':
             wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
             print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
+
             # Save the top N model checkpoints based on validation loss
-            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]:
+            if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]) and epoch>=150:
                 save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
                 if len(best_checkpoints) == top_n_checkpoints:
@@ -241,6 +258,10 @@ if __name__=='__main__':
         dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
         # ids = ['US_2021_NM3676810505920211120']
         for i, id in enumerate(ids):
+            # test_image_path = os.path.join(root_path,
+            #                                 'data_test_proj5/proj5_'+id+'_img_seqtoseql_' + str(ts_length) + '.npy')
+            # test_label_path = os.path.join(root_path,
+            #                                'data_test_proj5/proj5_'+id+'_label_seqtoseql_' + str(ts_length) + '.npy')
             test_image_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_{interval}.npy')
             test_label_path = os.path.join(root_path,
@@ -248,7 +269,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 196
+            load_epoch = 193
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -270,11 +291,10 @@ if __name__=='__main__':
             for j, batch in enumerate(test_dataloader):
                 test_data_batch = batch['data']
                 test_labels_batch = batch['labels']
-                b, c, t, w, h = test_data_batch.shape
-                test_data_batch = torch.reshape(test_data_batch, (b*t, c, w, h))
-                test_labels_batch = torch.reshape(test_labels_batch, (b*t, num_classes, w, h))
 
-                outputs = model(test_data_batch.to(device)).cpu().detach().numpy()
+                outputs = model(test_data_batch.to(device))
+                outputs = [post_trans(i) for i in decollate_batch(outputs)]
+                outputs = np.stack(outputs, axis=0)
                 import matplotlib.pyplot as plt
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):
@@ -287,32 +307,7 @@ if __name__=='__main__':
                         f1 += f1_ts
                         iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
                         iou += iou_ts
-
-                        # f, axarr = plt.subplots(2, 2)
-                        # axarr[0,0].imshow(output_stack)
-                        # axarr[0,0].set_title('Prediction')
-                        # axarr[0,0].axis('off')
-
-                        # axarr[0,1].imshow(label)
-                        # axarr[0,1].set_title('Ground Truth')
-                        # axarr[0,1].axis('off')
-
-                        # if n_channel!=6:
-                        #     axarr[1, 0].imshow(normalization(test_data_batch[k, 3, i, :, :]))
-                        #     axarr[1, 0].set_title('VIIRS I4 Day')
-                        #     axarr[1, 0].axis('off')
-
-                        #     axarr[1, 1].imshow(normalization(test_data_batch[k, 6, i, :, :]))
-                        #     axarr[1, 1].set_title('VIIRS I4 Night')
-                        #     axarr[1, 1].axis('off')
-                        # else:
-                        #     axarr[1, 0].imshow(normalization(test_data_batch[k, 1, i, :, :]))
-                        #     axarr[1, 0].set_title('VIIRS I4 Day')
-                        #     axarr[1, 0].axis('off')
-                            
-                        #     axarr[1, 1].imshow(normalization(test_data_batch[k, 4, i, :, :]))
-                        #     axarr[1, 1].set_title('VIIRS I4 Night')
-                        #     axarr[1, 1].axis('off')
+                        
                         plt.imshow(normalization(test_data_batch[k, 3, i, :, :]), cmap='Greys')
                         img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
                         img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
@@ -326,7 +321,7 @@ if __name__=='__main__':
                         plt.imshow(img_fn, cmap='brg', interpolation='nearest')
                         plt.axis('off')
 
-                        plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{ts}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel), bbox_inches='tight')
+                        plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel), bbox_inches='tight')
                         plt.show()
                         plt.close()
             iou_all += iou/length

@@ -42,6 +42,8 @@ class AFBADatasetProcessor(SatProcessingUtils):
 
             ba_label = np.zeros((output_shape_x, output_shape_y))
             af_acc_label = np.zeros((output_shape_x, output_shape_y))
+            new_base_acc_label = af_acc_label
+            new_base_ba_label = ba_label
             file_list_size = len(file_list)
             max_img = np.zeros((n_channels, output_shape_x, output_shape_y), dtype=np.float32)
             for i in range(0, file_list_size, interval):
@@ -71,8 +73,10 @@ class AFBADatasetProcessor(SatProcessingUtils):
                     img = np.nan_to_num(img[:,:output_shape_x, :output_shape_y])
                     max_img = np.maximum(img, max_img)
                     if usecase=='ba':
+                        print('usecase ba')
                         img = np.concatenate((img[:3,...],max_img[3:5,...],img[[5],...],max_img[6:8,...]))
                     elif usecase=='af':
+                        print('usecase af')
                         img = np.concatenate((img[:3,...],img[3:5,...],img[[5],...],img[6:8,...]))
                     else:
                         raise "no support usecase"
@@ -88,6 +92,9 @@ class AFBADatasetProcessor(SatProcessingUtils):
                     af = np.nan_to_num(af[offset:output_shape_x+offset, offset:output_shape_y+offset])
                     ba_label = np.logical_or(label, ba_label)
                     af_acc_label = np.logical_or(af, af_acc_label)
+                    if j == interval-1:
+                        new_base_acc_label = af_acc_label
+                        new_base_ba_label = ba_label
                     output_array[j, :n_channels, :, :] = img
                     output_label[j, 0, :, :] = np.logical_or(af_acc_label, ba_label)
                     output_label[j, 1, :, :] = af_acc_label
@@ -96,20 +103,22 @@ class AFBADatasetProcessor(SatProcessingUtils):
                         plt.figure(figsize=(12, 4), dpi=80)
                         plt.subplot(131)
                         plt.imshow(ba_img.transpose((1,2,0)))
-                        plt.imshow(np.where(af_acc_label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1)
+                        plt.imshow(np.where(af_acc_label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1, vmin=0, vamx=1)
                         plt.axis('off')
                         plt.title('AF ACC')
                         plt.subplot(132)
                         plt.imshow(ba_img.transpose((1,2,0)))
-                        plt.imshow(np.where(af==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1)
+                        plt.imshow(np.where(af==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1, vmin=0, vamx=1)
                         plt.axis('off')
                         plt.title('AF')
                         plt.subplot(133)
                         plt.imshow(ba_img.transpose((1,2,0)))
-                        plt.imshow(np.where(ba_label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1)
+                        plt.imshow(np.where(ba_label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1, vmin=0, vamx=1)
                         plt.axis('off')
                         plt.title('BA')
                         plt.savefig(save_path+'_figure/'+location+'_sequence_'+str(i)+'_time_'+str(j)+'_ts_'+str(ts_length)+'_comb.png', bbox_inches='tight')
+                af_acc_label = new_base_acc_label
+                ba_label = new_base_ba_label
                 array_stack.append(output_array)
                 label_stack.append(output_label)
             if len(array_stack)==0:

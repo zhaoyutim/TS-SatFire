@@ -61,7 +61,7 @@ class FireDataGenerator(tf.keras.utils.Sequence):
             np.random.shuffle(self.indexes)
 
 if __name__=='__main__':
-    data_gen = FireDataGenerator('af', train_test='val', ts_length=6, interval=3, batch_size=4, input_shape=(6,8), n_channels=8, n_classes=2)
+    data_gen = FireDataGenerator('af', train_test='train', ts_length=6, interval=3, batch_size=4, input_shape=(6,8), n_channels=8, n_classes=2)
     x_batch_train = data_gen[0][0]
     b, h, w, t, c = x_batch_train.shape[0], x_batch_train.shape[1], x_batch_train.shape[2], x_batch_train.shape[3], x_batch_train.shape[4]
     x_batch_train = tf.reshape(x_batch_train, (b*h*w, t, c))

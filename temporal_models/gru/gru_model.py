@@ -33,5 +33,5 @@ class GRUModel:
         for i in range(num_layers-2):
             gru_model.add(tf.keras.layers.GRU(hidden_size, dropout=0.2, return_sequences=True))
         gru_model.add(tf.keras.layers.GRU(hidden_size, dropout=0.2, return_sequences=return_sequences))
-        gru_model.add(tf.keras.layers.Dense(num_class, activation='relu'))
+        gru_model.add(tf.keras.layers.Dense(num_class, activation='sigmoid'))
         return gru_model

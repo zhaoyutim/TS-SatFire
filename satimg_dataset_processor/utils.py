@@ -61,7 +61,7 @@ class SatProcessingUtils:
         return mosaic, out_meta
     
     def tokenizing(self, data_path, window_size):
-        array = np.load(data_path).transpose((0, 3, 4, 1, 2))
+        array = np.load(data_path).transpose((0, 3, 4, 2, 1))
         return array
 
     def flatten_window(self, array, window_size):

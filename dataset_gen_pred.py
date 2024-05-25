@@ -3,7 +3,7 @@ import argparse
 
 from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor, PredDatasetProcessor
 dfs = []
-for year in ['2018','2019','2020']:
+for year in ['2017', '2018', '2019', '2020']:
 # for year in ['2021']:
     filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
     df = pd.read_csv(filename)
@@ -49,13 +49,18 @@ if __name__ == '__main__':
         locations = test_ids
     usecase='pred'
     satimg_processor = PredDatasetProcessor()
-    satimg_processor.pred_dataset_generator_seqtoseq(mode=modes, locations=locations, visualize=True, 
+    if modes in ['train', 'val']:
+        satimg_processor.pred_dataset_generator_seqtoseq(mode=modes, locations=locations, visualize=True, 
                                                 file_name=usecase+'_'+modes+'_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                 label_name=usecase+'_'+modes+'_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                 save_path = 'dataset/dataset_'+modes, ts_length=ts_length, 
                                                 interval=interval, image_size=(256, 256))
     # ids = ['donnie_creek', 'slave_lake']
-    # for id in ids:
-    #     print(id)
-    #     satimg_processor.dataset_generator_seqtoseq(mode = 'test', locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
-    #                                                        save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
+    else:
+        import os
+        for id in locations:
+            print(id)
+            os.system(f'gdrive upload -p 1EagJKmme73iHvJT9e03kS8GgBHOWkqnM dataset/dataset_test/pred_{id}_img_seqtoseql_6i_3.npy')
+            os.system(f'gdrive upload -p 1EagJKmme73iHvJT9e03kS8GgBHOWkqnM dataset/dataset_test/pred_{id}_label_seqtoseql_6i_3.npy')
+            # satimg_processor.pred_dataset_generator_seqtoseq(mode = 'test', locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
+                                                        #    save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))

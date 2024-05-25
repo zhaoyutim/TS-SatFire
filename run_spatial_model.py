@@ -89,11 +89,13 @@ if __name__=='__main__':
             for i in range(len(self.mean)):
                 sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
             return sample
-
-    transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
-        std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
-
-
+        
+    if mode != 'af':
+        transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
+            std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
+    else:
+        transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
+            std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
 
     # Dataloader
     if not train:
@@ -101,11 +103,17 @@ if __name__=='__main__':
         image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
-        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+        val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy') 
+        if mode == 'af':
+            train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel,label_sel=2)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel,label_sel=2)
+            val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+        else:
+            train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel,label_sel=0)
+            train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel,label_sel=0)
+            val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -152,9 +160,9 @@ if __name__=='__main__':
                 labels_batch = labels_batch.to(torch.long).to(device)
 
                 optimizer.zero_grad()
-                with torch.cuda.amp.autocast():
-                    outputs = model(data_batch)
-                    loss = criterion(outputs, labels_batch)
+                # with torch.cuda.amp.autocast():
+                outputs = model(data_batch)
+                loss = criterion(outputs, labels_batch)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -236,14 +244,20 @@ if __name__=='__main__':
         for _, checkpoint in best_checkpoints:
             print(checkpoint)
     else:
-        dfs=[]
-        for year in ['2021']:
-            filename = '~/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
-            df = pd.read_csv(filename)
-            dfs.append(df)
-        df = pd.concat(dfs, ignore_index=True)
-        ids = df['Id'].values.astype(str)
-        label_sel = df['label_sel'].values.astype(int)
+        if mode!='af':
+            dfs=[]
+            for year in ['2021']:
+                filename = '~/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
+                df = pd.read_csv(filename)
+                dfs.append(df)
+            df = pd.concat(dfs, ignore_index=True)
+            ids = df['Id'].values.astype(str)
+            label_sel = df['label_sel'].values.astype(int)
+        else:
+            ids = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire', 'sparks_lake_fire', 'lytton_fire', 'chuckegg_creek_fire', 'swedish_fire',
+                 'sydney_fire', 'thomas_fire', 'tubbs_fire', 'carr_fire', 'camp_fire',
+                 'creek_fire', 'blue_ridge_fire', 'dixie_fire', 'mosquito_fire', 'calfcanyon_fire']
+            label_sel=[2 for i in range(len(ids))]
         f1_all = 0
         iou_all = 0
         mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
@@ -257,7 +271,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 7
+            load_epoch = 170
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -290,7 +304,10 @@ if __name__=='__main__':
                 import matplotlib.pyplot as plt
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):
-                    output_stack = np.logical_or(output_stack, outputs[k, 1, :, :]>0.5)
+                    if mode != 'af':
+                        output_stack = np.logical_or(output_stack, outputs[k, 1, :, :]>0.5)
+                    else:
+                        output_stack = outputs[k, 1, :, :]>0.5
                     label = test_labels_batch[k, 1, :, :]>0
                     label = label.numpy()
 

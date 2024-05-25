@@ -6,11 +6,7 @@ from tensorflow.keras.layers import Bidirectional
 class LSTMModel:
     def __init__(self, input_shape, num_classes):
         self.input_shape = input_shape
-        # self.gru_layers=gru_layers
         self.num_classes = num_classes
-        # self.projection_dims=projection_dims
-        self.model = self.get_model(input_shape, num_classes)
-        self.model_10_layers = self.get_model_5_layers(input_shape, num_classes)
 
     def recall_m(self, y_true, y_pred):
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
@@ -43,5 +39,5 @@ class LSTMModel:
         for i in range(num_layers-2):
             lstm_model.add(tf.keras.layers.LSTM(hidden_size, dropout=0.2,return_sequences=True))
         lstm_model.add(tf.keras.layers.LSTM(hidden_size, dropout=0.2, return_sequences=return_sequences))
-        lstm_model.add(tf.keras.layers.Dense(num_class,activation='relu'))
+        lstm_model.add(tf.keras.layers.Dense(num_class,activation='sigmoid'))
         return lstm_model

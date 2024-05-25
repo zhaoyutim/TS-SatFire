@@ -9,10 +9,11 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 from monai.losses.dice import DiceLoss
 from monai.metrics import MeanIoU, DiceMetric
-from monai.networks.nets import UNet, AttentionUnet, UNETR
+from monai.networks.nets import UNet, AttentionUnet
 from monai.data import ArrayDataset, create_test_image_2d, decollate_batch, DataLoader
 from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveImage, ScaleIntensity
 from spatial_models.swinunetr.swinunetr import SwinUNETR
+from spatial_models.unetr.unetr import UNETR
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -90,31 +91,31 @@ if __name__=='__main__':
     # Dataloader
     if not train:
         wandb_config(model_name, num_heads, hidden_size, batch_size)
-        # image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        # label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        # val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        # val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        image_path = os.path.join(root_path, 'data_train_proj5/proj5_train_img_seqtoseq_alll_' + str(ts_length) + '.npy')
-        label_path = os.path.join(root_path, 'data_train_proj5/proj5_train_label_seqtoseq_alll_' + str(ts_length) + '.npy')
-        val_image_path = os.path.join(root_path, 'data_val_proj5/proj5_val_img_seqtoseql_' + str(ts_length) + '.npy')
-        val_label_path = os.path.join(root_path, 'data_val_proj5/proj5_val_label_seqtoseql_' + str(ts_length) + '.npy')
+        image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+        # image_path = os.path.join(root_path, 'data_train_proj5/proj5_train_img_seqtoseq_alll_' + str(ts_length) + '.npy')
+        # label_path = os.path.join(root_path, 'data_train_proj5/proj5_train_label_seqtoseq_alll_' + str(ts_length) + '.npy')
+        # val_image_path = os.path.join(root_path, 'data_val_proj5/proj5_val_img_seqtoseql_' + str(ts_length) + '.npy')
+        # val_label_path = os.path.join(root_path, 'data_val_proj5/proj5_val_label_seqtoseql_' + str(ts_length) + '.npy')
         train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     image_size = (ts_length, 256, 256)
     patch_size = (1, 2, 2)
     window_size = (ts_length, 4, 4)
     if model_name == 'unet3d':
-        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(3, 3, 3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
+        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(1, 3, 3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'attunet':
         model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr3d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size)
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size, patch_size=(1,16,16))
     elif model_name == 'swinunetr3d':
         model = SwinUNETR(
         image_size=image_size,
@@ -137,8 +138,8 @@ if __name__=='__main__':
     else:
         raise 'not implemented'
     
-    model = nn.DataParallel(model)
-    model.to(device)
+    # model = nn.DataParallel(model)
+    # model.to(device)
 
     summary(model, (n_channel, ts_length, 256, 256), batch_dim=0, device=device)
     criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)

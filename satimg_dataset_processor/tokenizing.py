@@ -1,18 +1,28 @@
 from utils import SatProcessingUtils
 import numpy as np
-
+import argparse
 if __name__=='__main__':
     import os
     tokenize_processor = SatProcessingUtils()
     locations = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire', 'sparks_lake_fire', 'lytton_fire', 'chuckegg_creek_fire', 'swedish_fire',
                  'sydney_fire', 'thomas_fire', 'tubbs_fire', 'carr_fire', 'camp_fire',
                  'creek_fire', 'blue_ridge_fire', 'dixie_fire', 'mosquito_fire', 'calfcanyon_fire']
-
+    
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('-mode', type=str, help='Train/Val/Test')
+    parser.add_argument('-ts', type=int, help='Length of TS')
+    parser.add_argument('-it', type=int, help='Interval')
+    parser.add_argument('-uc', type=str, help='use case')
+    args = parser.parse_args()
+    ts_length = args.ts
+    interval = args.it
+    uc = args.uc
+    modes = args.mode
+    if modes == 'train':
+        locations = ['train', 'val']
+    else:
+        locations = locations
     window_size = 1
-    ts_length=6
-    interval=3 
-    uc='spat'
-    # for location in ['val']:
     for location in locations:
         if location in ['val', 'train']:
             root_path = f'/home/z/h/zhao2/TS-SatFire/dataset/dataset_{location}'
@@ -31,6 +41,7 @@ if __name__=='__main__':
             tokenized_array = tokenized_array[:,:,:,lb:rb,:]
             tokenized_label = tokenized_label[:,:,:,lb:rb]
         if uc == 'temp':
+            print('tokenizing')
             tokenized_array = np.nan_to_num(tokenized_array).reshape(-1,tokenized_array.shape[-2],tokenized_array.shape[-1])
             tokenized_label = np.nan_to_num(tokenized_label).reshape(-1,tokenized_label.shape[-1])
             print(tokenized_array.shape)

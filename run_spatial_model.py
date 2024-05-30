@@ -1,7 +1,9 @@
 import argparse
 import heapq
 import platform
+from functools import reduce
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="6,7,8,9"
 import numpy as np
 import torch
 SEED = 42
@@ -15,7 +17,8 @@ from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveIm
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from torchinfo import summary
+# from torchinfo import summary
+from torchsummary import summary
 from tqdm import tqdm
 import wandb
 from satimg_dataset_processor.data_generator_torch import FireDataset
@@ -116,7 +119,7 @@ if __name__=='__main__':
             val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     image_size = (256, 256)
     # patch_size = (1, 2, 2)
@@ -126,16 +129,16 @@ if __name__=='__main__':
     elif model_name == 'attunet':
         model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=48)
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
     elif model_name == 'swinunetr2d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=48)
+        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
     else:
         raise 'not implemented'
     
     model = nn.DataParallel(model)
     model.to(device)
 
-    summary(model, (n_channel, 256, 256), batch_dim=0, device=device)
+    print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")
     criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
     mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
     dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
@@ -271,7 +274,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 170
+            load_epoch = 185
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)

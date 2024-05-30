@@ -13,12 +13,10 @@ class FireDataGenerator(tf.keras.utils.Sequence):
         else:
             img_path = os.path.join(root_path, f'dataset_test/{mode}_{train_test}_img_seqtoseq_l{ts_length}_w1.npy')
             label_path = os.path.join(root_path, f'dataset_test/{mode}_{train_test}_label_seqtoseq_l{ts_length}_w1.npy')
-        self.img = np.load(img_path)
-        label_all = np.load(label_path)
+        self.img = np.load(img_path, mmap_mode='r')
+        self.label_all = np.load(label_path, mmap_mode='r')
 
-        self.label = np.zeros((label_all.shape[0], label_all.shape[1], 2))
-        self.label[..., 0] = label_all == 0
-        self.label[..., 1] = label_all > 0
+
 
         self.batch_size = batch_size
         self.n_channels = n_channels
@@ -41,9 +39,11 @@ class FireDataGenerator(tf.keras.utils.Sequence):
         # 'Generate one batch of data'
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-
+        self.label = np.zeros((self.batch_size, self.label_all.shape[1], 2))
+        self.label[..., 0] = self.label_all[indexes] == 0
+        self.label[..., 1] = self.label_all[indexes] > 0
         # Generate data
-        X, y = self.img[indexes], self.label[indexes]
+        X, y = self.img[indexes], self.label
 
         return self.__normalize(X), y
 

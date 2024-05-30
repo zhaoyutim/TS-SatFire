@@ -2,6 +2,7 @@ import argparse
 import heapq
 import platform
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="6,7,8,9"
 import numpy as np
 import torch
 SEED = 42
@@ -83,11 +84,13 @@ if __name__=='__main__':
     top_n_checkpoints = 3
     train = args.binary_flag
 
-    transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
-        std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
-    # transform = Normalize(mean=[47.041927,53.98012,36.33056,318.13885,308.42276,29.793797,291.0422,288.78125],
-    #                 std=[22.357374,21.575853,14.279626,11.570329,10.646594,14.370376,11.274373,6.923434])
-
+    if mode != 'af':
+        transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
+            std = [15.359564,14.336508,10.64194,12.505946,11.571564,9.666024,11.495529,7.9788895])
+    else:
+        transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
+            std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
+        
     # Dataloader
     if not train:
         wandb_config(model_name, num_heads, hidden_size, batch_size)
@@ -105,13 +108,13 @@ if __name__=='__main__':
         val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 
-    device = torch.device("cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     image_size = (ts_length, 256, 256)
     patch_size = (1, 2, 2)
     window_size = (ts_length, 4, 4)
     if model_name == 'unet3d':
-        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(1, 3, 3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
+        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(1, 3, 3), up_kernel_size=(1,3,3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'attunet':
         model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr3d':
@@ -138,10 +141,10 @@ if __name__=='__main__':
     else:
         raise 'not implemented'
     
-    # model = nn.DataParallel(model)
-    # model.to(device)
+    model = nn.DataParallel(model)
+    model.to(device)
 
-    summary(model, (n_channel, ts_length, 256, 256), batch_dim=0, device=device)
+    print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")
     criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
     mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
     dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
@@ -163,9 +166,9 @@ if __name__=='__main__':
                 labels_batch = labels_batch.to(torch.long).to(device)
 
                 optimizer.zero_grad()
-                with torch.cuda.amp.autocast():
-                    outputs = model(data_batch)
-                    loss = criterion(outputs, labels_batch)
+
+                outputs = model(data_batch)
+                loss = criterion(outputs, labels_batch)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
@@ -270,7 +273,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 193
+            load_epoch = 196
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -293,6 +296,8 @@ if __name__=='__main__':
                 test_data_batch = batch['data']
                 test_labels_batch = batch['labels']
 
+                # test_data_batch[:,7,:,:,:] = 0
+
                 outputs = model(test_data_batch.to(device))
                 outputs = [post_trans(i) for i in decollate_batch(outputs)]
                 outputs = np.stack(outputs, axis=0)
@@ -300,7 +305,8 @@ if __name__=='__main__':
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):
                     for i in range(ts_length):
-                        output_stack = np.logical_or(output_stack, outputs[k, 1, i, :, :]>0.5)
+                        # output_stack = np.logical_or(output_stack, outputs[k, 1, i, :, :]>0.5)
+                        output_stack = outputs[k, 1, i, :, :]>0.5
                         label = test_labels_batch[k, 1, i, :, :]>0
                         label = label.numpy()
 

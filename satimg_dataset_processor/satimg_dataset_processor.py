@@ -141,7 +141,7 @@ class AFBADatasetProcessor(SatProcessingUtils):
 
 class PredDatasetProcessor(SatProcessingUtils):
     def pred_dataset_generator_seqtoseq(self, mode, locations, file_name, label_name, save_path, rs_idx=0, cs_idx=0,
-                                               visualize=True, ts_length=10, interval=3, image_size=(224, 224)):
+                                               visualize=True, ts_length=10, interval=3, image_size=(224, 224), label_sel=1):
         satellite_day = 'VIIRS_Day'
         stack_over_location = []
         stack_label_over_locations = []
@@ -197,13 +197,13 @@ class PredDatasetProcessor(SatProcessingUtils):
                     else:
                         array_night = np.zeros((2, original_shape_x, original_shape_y))
                     array_pred, _ = preprocessing.read_tiff(file.replace('VIIRS_Day', 'FirePred'))
-                    print(file)
+                    # print(file)
                     img = np.concatenate((array_day[:6, offset:output_shape_x+offset, offset:output_shape_y+offset], array_night[:, offset:output_shape_x+offset, offset:output_shape_y+offset], array_pred[:, offset:output_shape_x+offset, offset:output_shape_y+offset]), axis=0)
                     img = np.nan_to_num(img[:,:output_shape_x, :output_shape_y])
                     max_img = np.maximum(img, max_img)
                     # if use max image
                     img = np.concatenate((img[:3,...],max_img[3:5,...],img[[5],...],max_img[6:8,...],img[8:,...]))
-                    print(img.shape)
+                    # print(img.shape)
                     ba_img = img[3,:,:]
                     if array_day.shape[0]==8:
                         label = np.nan_to_num(array_day[7, :, :])
@@ -216,13 +216,19 @@ class PredDatasetProcessor(SatProcessingUtils):
                     af = np.nan_to_num(af[offset:output_shape_x+offset, offset:output_shape_y+offset])
                     ba_label = np.logical_or(label, ba_label)
                     af_acc_label = np.logical_or(af, af_acc_label)
+                    if label_sel==1:
+                        final_label = af_acc_label
+                    else:
+                        final_label = np.logical_or(af_acc_label, ba_label)
+                    
                     if j == interval-1:
                         new_base_acc_label = af_acc_label
                         new_base_ba_label = ba_label
                     if j <ts_length:
+                        prev_final_label = final_label.copy()
                         output_array[j, :n_channels, :, :] = img
                     if j == ts_length:
-                        output_label[:, :] = af_acc_label
+                        output_label[:, :] = np.where(np.logical_and(prev_final_label==0, final_label>0), 1, 0)
                     if visualize and j == ts_length:
                         plt.figure(figsize=(8, 4), dpi=80)
                         plt.subplot(121)

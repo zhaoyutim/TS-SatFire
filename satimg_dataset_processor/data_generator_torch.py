@@ -4,17 +4,35 @@ import numpy as np
 import torch
 from monai.metrics import MeanIoU, DiceMetric
 from torch.utils.data import Dataset, DataLoader
-
+import torchvision.transforms.functional as TF
 
 class Normalize(object):
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
 
-    def __call__(self, sample):
+    def __call__(self, sample, label):
+        hflip = bool(np.random.random() > 0.5)
+        vflip = bool(np.random.random() > 0.5)
+        rotate = int(np.floor(np.random.random() * 4))
+        if hflip:
+            sample = TF.hflip(sample)
+            label = TF.hflip(label)
+
+        if vflip:
+            sample = TF.vflip(sample)
+            label = TF.vflip(label)
+
+        if rotate != 0:
+            angle = rotate * 90
+            sample = TF.rotate(sample, angle)
+            # label = torch.unsqueeze(label, 0)
+            label = TF.rotate(label, angle)
+            # label = torch.squeeze(label, 0)
+
         for i in range(len(self.mean)):
             sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
-        return sample
+        return sample, label
 
 class FireDataset(Dataset):
     def __init__(self, image_path, label_path, ts_length=8, transform=None, n_channel=8, label_sel=0):
@@ -32,7 +50,7 @@ class FireDataset(Dataset):
         # load a chunk of data from disk
         data_chunk, label_chunk = self.load_data(idx)
         if self.transform:
-            data_chunk = self.transform(data_chunk)
+            data_chunk, label_chunk = self.transform(data_chunk, label_chunk)
         sample = {
             'data': data_chunk,
             'labels': label_chunk,
@@ -72,8 +90,8 @@ if __name__ == '__main__':
     mode = 'ba'
     interval = 3
     ts_length = 6
-    image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-    label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+    image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
+    label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
     transform = Normalize(mean = [18.76488,27.441864,20.584806,305.99478,294.31738,14.625097,276.4207,275.16766],
                         std = [15.911591,14.879259,10.832616,21.761852,24.703484,9.878246,40.64329,40.7657])
     train_dataset = FireDataset(image_path=image_path, label_path=label_path, transform=transform, ts_length=ts_length, n_channel=8)

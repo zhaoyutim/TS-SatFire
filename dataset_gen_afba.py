@@ -1,32 +1,29 @@
 import argparse
 import pandas as pd
 
-from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor
+from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor, AFTestDatasetProcessor
+# Training set rois
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:
-# for year in ['2021']:
     filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
     df = pd.read_csv(filename)
     dfs.append(df)
 df = pd.concat(dfs, ignore_index=True)
+# Test set rois
 dfs_test = []
 for year in ['2021']:
     filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
     df_test = pd.read_csv(filename)
     dfs_test.append(df_test)
 df_test = pd.concat(dfs_test, ignore_index=True)
-# val_ids = ['24462610', '24462788', '24462753']
+
 val_ids = ['20568194', '20701026','20562846','20700973','24462610', '24462788', '24462753', '24103571', '21998313', '21751303', '22141596', '21999381', '23301962', '22712904', '22713339']
-test_ids = ['24461623', '24332628']
-skip_ids = ['21890069', '20777160', '20777163', '20777166']
-target_ids = ['21889672', '21889683', '21889697', '21889719', '21889734', '21889754', '21997775'] 
+skip_ids = ['21889672', '21889683', '21889697', '21889719', '21889734', '21889754', '21997775']
 
 df = df.sort_values(by=['Id'])
 df['Id'] = df['Id'].astype(str)
-train_df = df[~df.Id.isin(val_ids + skip_ids + test_ids)]
+train_df = df[~df.Id.isin(val_ids + skip_ids)]
 val_df = df[df.Id.isin(val_ids)]
-test_df = df[df.Id.isin(test_ids)]
-target_df = df[df.Id.isin(target_ids)]
 
 train_ids = train_df['Id'].values.astype(str)
 val_ids = val_df['Id'].values.astype(str)
@@ -43,28 +40,32 @@ if __name__ == '__main__':
     ts_length = args.ts
     interval = args.it
     modes = args.mode
+    usecase=args.uc
     if modes == 'train':
         locations = train_ids
     elif modes == 'val':
         locations = val_ids
     else:
-        locations = test_ids
-    usecase=args.uc
+        if usecase == 'ba':
+            locations = test_ids
+        else:
+            locations = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire','sparks_lake_fire', 'lytton_fire', 
+                        'chuckegg_creek_fire', 'swedish_fire', 'sydney_fire', 'thomas_fire', 'tubbs_fire', 
+                        'carr_fire', 'camp_fire', 'creek_fire', 'blue_ridge_fire', 'dixie_fire', 'mosquito_fire', 'calfcanyon_fire']
+    
     satimg_processor = AFBADatasetProcessor()
     if modes == 'train' or modes == 'val':
-        satimg_processor.dataset_generator_seqtoseq(mode=modes, usecase=usecase, locations=locations, visualize=False, 
+        satimg_processor.dataset_generator_seqtoseq(mode=modes, usecase=usecase, data_path='/home/z/h/zhao2/CalFireMonitoring/data/', locations=locations, visualize=False, 
                                                     file_name=usecase+'_'+modes+'_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                     label_name=usecase+'_'+modes+'_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                     save_path = 'dataset/dataset_'+modes, ts_length=ts_length, 
                                                     interval=interval, image_size=(256, 256))
-    else:
-        # ids = ['donnie_creek', 'slave_lake']
-        # import numpy as np
-        # cnt = 0
+    else:  
         for id in locations:
-            # print(id)
-            # arr = np.load('dataset/dataset_test/'+usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy')
-            # cnt+=arr.shape[0]
-            satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, locations=[id], visualize=True, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
+            if usecase == 'ba':
+                satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, data_path='/home/z/h/zhao2/CalFireMonitoring/data/', locations=[id], visualize=False, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
                                                             save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
-        # print(cnt)
+            else:
+                af_test_processor = AFTestDatasetProcessor()
+                # af_test_processor.af_test_dataset_generator(id, save_path='dataset/dataset_test', file_name ='af_' + id + '_img.npy')
+                af_test_processor.af_seq_tokenizing_and_test_slicing(location=id, modes=modes, ts_length=ts_length, interval=interval, usecase='temp', root_path='/home/z/h/zhao2/TS-SatFire/dataset', save_path='/home/z/h/zhao2/TS-SatFire/dataset')

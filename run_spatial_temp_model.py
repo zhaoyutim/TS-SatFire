@@ -10,7 +10,8 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 from monai.losses.dice import DiceLoss
 from monai.metrics import MeanIoU, DiceMetric
-from monai.networks.nets import UNet, AttentionUnet
+from spatial_models.unet import UNet
+from spatial_models.attentionunet import AttentionUnet
 from monai.data import ArrayDataset, create_test_image_2d, decollate_batch, DataLoader
 from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveImage, ScaleIntensity
 from spatial_models.swinunetr.swinunetr import SwinUNETR
@@ -27,7 +28,6 @@ import torchvision.transforms as transforms
 import pandas as pd
 
 root_path = '/home/z/h/zhao2/TS-SatFire/dataset/'
-# root_path = '/geoinfo_vol1/home/z/h/zhao2/CalFireMonitoring/'
 
 def wandb_config(model_name, num_heads, hidden_size, batch_size):
     wandb.login()
@@ -52,29 +52,25 @@ if __name__=='__main__':
     parser.add_argument('-lr', type=float, help='learning rate')
 
     parser.add_argument('-nh', type=int, help='number-of-head')
-    # parser.add_argument('-md', type=int, help='mlp-dimension')
     parser.add_argument('-ed', type=int, help='embedding dimension')
     parser.add_argument('-nc', type=int, help='n_channel')
     parser.add_argument('-ts', type=int, help='ts_length')
     parser.add_argument('-it', type=int, help='interval')
     parser.add_argument('-test', dest='binary_flag', action='store_true', help='embedding dimension')
     parser.set_defaults(binary_flag=False)
-    # parser.add_argument('-nl', type=int, help='num_layers')
 
     args = parser.parse_args()
     model_name = args.m
     batch_size = args.b
 
     num_heads=args.nh
-    # mlp_dim=args.md
-    # num_layers=args.nl
     hidden_size=args.ed
     ts_length=args.ts
 
 
     run = args.r
     lr = args.lr
-    MAX_EPOCHS = 200
+    MAX_EPOCHS = 100
     learning_rate = lr
     weight_decay = lr / 10
     num_classes = 2
@@ -98,10 +94,6 @@ if __name__=='__main__':
         label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        # image_path = os.path.join(root_path, 'data_train_proj5/proj5_train_img_seqtoseq_alll_' + str(ts_length) + '.npy')
-        # label_path = os.path.join(root_path, 'data_train_proj5/proj5_train_label_seqtoseq_alll_' + str(ts_length) + '.npy')
-        # val_image_path = os.path.join(root_path, 'data_val_proj5/proj5_val_img_seqtoseql_' + str(ts_length) + '.npy')
-        # val_label_path = os.path.join(root_path, 'data_val_proj5/proj5_val_label_seqtoseql_' + str(ts_length) + '.npy')
         train_dataset = FireDataset(image_path=image_path, label_path=label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataset = FireDataset(image_path=val_image_path, label_path=val_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel)
@@ -114,9 +106,9 @@ if __name__=='__main__':
     patch_size = (1, 2, 2)
     window_size = (ts_length, 4, 4)
     if model_name == 'unet3d':
-        model = UNet(spatial_dims=3, in_channels=n_channel, kernel_size=(1, 3, 3), up_kernel_size=(1,3,3), out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
-    elif model_name == 'attunet':
-        model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
+        model = UNet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(1,2,2))
+    elif model_name == 'attunet3d':
+        model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(1,2,2))
     elif model_name == 'unetr3d':
         model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size, patch_size=(1,16,16))
     elif model_name == 'swinunetr3d':
@@ -133,7 +125,7 @@ if __name__=='__main__':
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
-        attn_version='v2',
+        attn_version='v1',
         normalize=True,
         use_checkpoint=False,
         spatial_dims=3
@@ -154,7 +146,7 @@ if __name__=='__main__':
     model.to(device)
     best_checkpoints = []
     if not train:
-        # create a progress bar for the training loop
+        # Training look starts here
         for epoch in range(MAX_EPOCHS):
             model.train()
             train_loss = 0.0
@@ -212,29 +204,23 @@ if __name__=='__main__':
             wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
             print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
-
-            # Save the top N model checkpoints based on validation loss
-            if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]) and epoch>=150:
+            # Save top N epoches. 
+            if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]) and epoch>=50:
                 save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
                 if len(best_checkpoints) == top_n_checkpoints:
-                    # Remove the checkpoint with the highest validation loss
                     _, remove_checkpoint = heapq.heappop(best_checkpoints)
                     if os.path.exists(remove_checkpoint):
                         os.remove(remove_checkpoint)
 
-                # Save the new checkpoint
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
                 }, save_path)
-
-                # Add the new checkpoint to the priority queue
+                
                 heapq.heappush(best_checkpoints, (val_loss, save_path))
-
-                # Ensure that the priority queue has at most N elements
                 best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
         if os.path.exists(save_path):
             os.remove(save_path)
@@ -260,20 +246,18 @@ if __name__=='__main__':
         iou_all = 0
         mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
         dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-        # ids = ['US_2021_NM3676810505920211120']
         for i, id in enumerate(ids):
-            # test_image_path = os.path.join(root_path,
-            #                                 'data_test_proj5/proj5_'+id+'_img_seqtoseql_' + str(ts_length) + '.npy')
-            # test_label_path = os.path.join(root_path,
-            #                                'data_test_proj5/proj5_'+id+'_label_seqtoseql_' + str(ts_length) + '.npy')
+            if not os.path.exists(f'evaluation_plot'):
+                os.mkdir(f'evaluation_plot')
             test_image_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_{interval}.npy')
             test_label_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_label_seqtoseql_{ts_length}i_{interval}.npy')
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            
             # Load the model checkpoint
-            load_epoch = 196
+            load_epoch = 179
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -282,8 +266,7 @@ if __name__=='__main__':
             loaded_epoch = checkpoint['epoch']
             loaded_loss = checkpoint['loss']
 
-            # Make sure to set the model to eval or train mode after loading
-            model.eval()  # or model.train()
+            model.eval() 
             def normalization(array):
                 return (array-array.min()) / (array.max() - array.min())
 
@@ -305,7 +288,6 @@ if __name__=='__main__':
                 length += test_data_batch.shape[0] * ts_length
                 for k in range(test_data_batch.shape[0]):
                     for i in range(ts_length):
-                        # output_stack = np.logical_or(output_stack, outputs[k, 1, i, :, :]>0.5)
                         output_stack = outputs[k, 1, i, :, :]>0.5
                         label = test_labels_batch[k, 1, i, :, :]>0
                         label = label.numpy()
@@ -328,7 +310,7 @@ if __name__=='__main__':
                         plt.imshow(img_fn, cmap='brg', interpolation='nearest')
                         plt.axis('off')
 
-                        plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel), bbox_inches='tight')
+                        plt.savefig('evaluation_plot/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel), bbox_inches='tight')
                         plt.show()
                         plt.close()
             iou_all += iou/length

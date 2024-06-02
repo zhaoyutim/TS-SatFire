@@ -17,8 +17,7 @@ from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveIm
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-# from torchinfo import summary
-from torchsummary import summary
+
 from tqdm import tqdm
 import wandb
 from satimg_dataset_processor.data_generator_torch import FireDataset
@@ -51,29 +50,25 @@ if __name__=='__main__':
     parser.add_argument('-lr', type=float, help='learning rate')
 
     parser.add_argument('-nh', type=int, help='number-of-head')
-    # parser.add_argument('-md', type=int, help='mlp-dimension')
     parser.add_argument('-ed', type=int, help='embedding dimension')
     parser.add_argument('-nc', type=int, help='n_channel')
     parser.add_argument('-ts', type=int, help='ts_length')
     parser.add_argument('-it', type=int, help='interval')
     parser.add_argument('-test', dest='binary_flag', action='store_true', help='embedding dimension')
     parser.set_defaults(binary_flag=False)
-    # parser.add_argument('-nl', type=int, help='num_layers')
 
     args = parser.parse_args()
     model_name = args.m
     batch_size = args.b
 
     num_heads=args.nh
-    # mlp_dim=args.md
-    # num_layers=args.nl
     hidden_size=args.ed
     ts_length=args.ts
 
 
     run = args.r
     lr = args.lr
-    MAX_EPOCHS = 200
+    MAX_EPOCHS = 100
     learning_rate = lr
     weight_decay = lr / 10
     num_classes = 2
@@ -122,8 +117,6 @@ if __name__=='__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     image_size = (256, 256)
-    # patch_size = (1, 2, 2)
-    # window_size = (ts_length, 4, 4)
     if model_name == 'unet':
         model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'attunet':
@@ -148,7 +141,6 @@ if __name__=='__main__':
     model.to(device)
     best_checkpoints = []
     if not train:
-        # create a progress bar for the training loop
         for epoch in range(MAX_EPOCHS):
             model.train()
             train_loss = 0.0
@@ -212,17 +204,14 @@ if __name__=='__main__':
             wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
             print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
-            # Save the top N model checkpoints based on validation loss
             if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=150:
                 save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
                 if len(best_checkpoints) == top_n_checkpoints:
-                    # Remove the checkpoint with the highest validation loss
                     _, remove_checkpoint = heapq.heappop(best_checkpoints)
                     if os.path.exists(remove_checkpoint):
                         os.remove(remove_checkpoint)
 
-                # Save the new checkpoint
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
@@ -230,10 +219,7 @@ if __name__=='__main__':
                     'loss': loss,
                 }, save_path)
 
-                # Add the new checkpoint to the priority queue
                 heapq.heappush(best_checkpoints, (val_loss, save_path))
-
-                # Ensure that the priority queue has at most N elements
                 best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
         if os.path.exists(save_path):
             os.remove(save_path)
@@ -265,7 +251,6 @@ if __name__=='__main__':
         iou_all = 0
         mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
         dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-        # ids = ['US_2021_NM3676810505920211120']
         for i, id in enumerate(ids):
             test_image_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_{interval}.npy')
@@ -283,8 +268,7 @@ if __name__=='__main__':
             loaded_epoch = checkpoint['epoch']
             loaded_loss = checkpoint['loss']
 
-            # Make sure to set the model to eval or train mode after loading
-            model.eval()  # or model.train()
+            model.eval()
             def normalization(array):
                 return (array-array.min()) / (array.max() - array.min())
 
@@ -318,32 +302,6 @@ if __name__=='__main__':
                     f1 += f1_ts
                     iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
                     iou += iou_ts
-
-                    # f, axarr = plt.subplots(2, 2)
-                    # axarr[0,0].imshow(output_stack)
-                    # axarr[0,0].set_title('Prediction')
-                    # axarr[0,0].axis('off')
-
-                    # axarr[0,1].imshow(label)
-                    # axarr[0,1].set_title('Ground Truth')
-                    # axarr[0,1].axis('off')
-
-                    # if n_channel!=6:
-                    #     axarr[1, 0].imshow(normalization(test_data_batch[k, 3, i, :, :]))
-                    #     axarr[1, 0].set_title('VIIRS I4 Day')
-                    #     axarr[1, 0].axis('off')
-
-                    #     axarr[1, 1].imshow(normalization(test_data_batch[k, 6, i, :, :]))
-                    #     axarr[1, 1].set_title('VIIRS I4 Night')
-                    #     axarr[1, 1].axis('off')
-                    # else:
-                    #     axarr[1, 0].imshow(normalization(test_data_batch[k, 1, i, :, :]))
-                    #     axarr[1, 0].set_title('VIIRS I4 Day')
-                    #     axarr[1, 0].axis('off')
-                        
-                    #     axarr[1, 1].imshow(normalization(test_data_batch[k, 4, i, :, :]))
-                    #     axarr[1, 1].set_title('VIIRS I4 Night')
-                    #     axarr[1, 1].axis('off')
                     plt.imshow(normalization(test_data_batch[k, 3, :, :]), cmap='Greys')
                     img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
                     img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
@@ -357,7 +315,7 @@ if __name__=='__main__':
                     plt.imshow(img_fn, cmap='brg', interpolation='nearest')
                     plt.axis('off')
 
-                    plt.savefig('plt_0422/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, n_channel), bbox_inches='tight')
+                    plt.savefig('evaluation_plot/id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, n_channel), bbox_inches='tight')
                     plt.show()
                     plt.close()
             iou_all += iou/length

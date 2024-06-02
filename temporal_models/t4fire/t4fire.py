@@ -1,7 +1,7 @@
 import tensorflow as tf
 import typing_extensions as tx
 
-from temporal_models.vit_keras.patch_encoder import PatchEncoder
+from temporal_models.t4fire.patch_encoder import PatchEncoder
 from . import layers
 
 ConfigDict = tx.TypedDict(

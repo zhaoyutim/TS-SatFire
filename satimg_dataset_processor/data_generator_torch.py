@@ -11,24 +11,23 @@ class Normalize(object):
         self.mean = mean
         self.std = std
 
-    def __call__(self, sample, label):
-        hflip = bool(np.random.random() > 0.5)
-        vflip = bool(np.random.random() > 0.5)
-        rotate = int(np.floor(np.random.random() * 4))
-        if hflip:
-            sample = TF.hflip(sample)
-            label = TF.hflip(label)
+    def __call__(self, sample, label, augmentation=True):
+        if augmentation:
+            hflip = bool(np.random.random() > 0.5)
+            vflip = bool(np.random.random() > 0.5)
+            rotate = int(np.floor(np.random.random() * 4))
+            if hflip:
+                sample = TF.hflip(sample)
+                label = TF.hflip(label)
 
-        if vflip:
-            sample = TF.vflip(sample)
-            label = TF.vflip(label)
+            if vflip:
+                sample = TF.vflip(sample)
+                label = TF.vflip(label)
 
-        if rotate != 0:
-            angle = rotate * 90
-            sample = TF.rotate(sample, angle)
-            # label = torch.unsqueeze(label, 0)
-            label = TF.rotate(label, angle)
-            # label = torch.squeeze(label, 0)
+            if rotate != 0:
+                angle = rotate * 90
+                sample = TF.rotate(sample, angle)
+                label = TF.rotate(label, angle)
 
         for i in range(len(self.mean)):
             sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
@@ -42,6 +41,10 @@ class FireDataset(Dataset):
         self.n_channel = n_channel
         self.label_sel = label_sel
         self.ts_length = ts_length
+        if 'train' in self.label_path:
+            self.augmentation = True
+        else:
+            self.augmentation = False
 
     def __len__(self):
         return self.num_samples
@@ -50,7 +53,7 @@ class FireDataset(Dataset):
         # load a chunk of data from disk
         data_chunk, label_chunk = self.load_data(idx)
         if self.transform:
-            data_chunk, label_chunk = self.transform(data_chunk, label_chunk)
+            data_chunk, label_chunk = self.transform(data_chunk, label_chunk, self.augmentation)
         sample = {
             'data': data_chunk,
             'labels': label_chunk,

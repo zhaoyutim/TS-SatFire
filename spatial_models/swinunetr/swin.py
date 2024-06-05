@@ -78,24 +78,6 @@ class SwinTransformerBlock(nn.Module):
                 attn_drop   = attn_drop,
                 proj_drop   = drop,
             )
-        elif attn_version == 'v2':
-            self.attn = WindowAttentionV2(
-                dim,
-                window_size = self.window_size,
-                num_heads   = num_heads,
-                qkv_bias    = qkv_bias,
-                attn_drop   = attn_drop,
-                proj_drop   = drop,
-            )
-        elif attn_version == 'ar':
-            self.attn = AutoregressiveAttention(
-                dim,
-                window_size = self.window_size,
-                num_heads   = num_heads,
-                qkv_bias    = qkv_bias,
-                attn_drop   = attn_drop,
-                proj_drop   = drop,
-            )
         else:
             raise ValueError('unknown attn_version')
 

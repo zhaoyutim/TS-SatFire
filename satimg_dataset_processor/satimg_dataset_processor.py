@@ -17,8 +17,8 @@ class AFBADatasetProcessor(SatProcessingUtils):
             os.mkdir(save_path)
         for location in locations:
             print(location)
-            data_path = data_path + location + '/' + satellite_day + '/'
-            file_list = glob(data_path + '/*.tif')
+            study_area_path = data_path + '/' + location + '/' + satellite_day + '/'
+            file_list = glob(study_area_path + '/*.tif')
             file_list.sort()
             if len(file_list) == 0:
                 print('empty file list')
@@ -42,8 +42,9 @@ class AFBADatasetProcessor(SatProcessingUtils):
             max_img = np.zeros((n_channels, output_shape_x, output_shape_y), dtype=np.float32)
             for i in range(0, file_list_size, interval):
                 if i + ts_length >= file_list_size:
-                    print('drop the tail')
-                    break
+                    i=file_list_size-ts_length
+                    print('append the tail')
+                    # break
                 output_array = np.zeros((ts_length, n_channels, output_shape_x, output_shape_y), dtype=np.float32)
                 output_label = np.zeros((ts_length, 3, output_shape_x, output_shape_y), dtype=np.float32)
                 for j in range(ts_length):
@@ -424,44 +425,50 @@ class AFTestDatasetProcessor(SatProcessingUtils):
         np.save(save_path + file_name.replace('img', 'label'), output_array_stacked[:,:,-1,:,:].astype(np.float))
 
     def af_seq_tokenizing_and_test_slicing(self, location, modes, ts_length, interval, usecase, root_path, save_path):
-        if modes == 'train':
-            locations = ['train', 'val']
-        else:
-            locations = locations
         window_size = 1
-        for location in locations:
-            print(location)
-            if location in ['val', 'train']:
-                root_path = f'{root_path}/dataset_{location}'
-                save_path = f'{root_path}/dataset_{location}'
-                tokenized_array = np.load(os.path.join(root_path, f'af_{location}_img_seqtoseq_alll_{ts_length}i_{interval}.npy')).transpose((0, 3, 4, 2, 1))
-                tokenized_label = np.load(os.path.join(root_path, f'af_{location}_label_seqtoseq_alll_{ts_length}i_{interval}.npy')).transpose((0, 3, 4, 2, 1))
-                tokenized_label = tokenized_label[..., 2]
-            else:
-                root_path = '/home/z/h/zhao2/CalFireMonitoring/data_train_proj2'
-                save_path = '/home/z/h/zhao2/TS-SatFire/dataset/dataset_test'
-                tokenized_array = np.load(os.path.join(root_path, f'af_{location}_img.npy')).transpose((0, 3, 4, 1, 2))
-                tokenized_label = np.load(os.path.join(root_path, f'af_{location}_label.npy')).transpose((0, 2, 3, 1))
-            if tokenized_array.shape[-2]>=ts_length:
-                lb = (tokenized_array.shape[-2]-ts_length)//2
-                rb = (tokenized_array.shape[-2]+ts_length)//2
-                tokenized_array = tokenized_array[:,:,:,lb:rb,:]
-                tokenized_label = tokenized_label[:,:,:,lb:rb]
-            if usecase == 'temp':
-                print('tokenizing')
-                tokenized_array = np.nan_to_num(tokenized_array).reshape(-1,tokenized_array.shape[-2],tokenized_array.shape[-1])
-                tokenized_label = np.nan_to_num(tokenized_label).reshape(-1,tokenized_label.shape[-1])
-                print(tokenized_array.shape)
-                print(tokenized_label.shape)
-                np.save(os.path.join(save_path,f'af_{location}_img_seqtoseq_l{ts_length}_w{window_size}.npy'), tokenized_array)
-                np.save(os.path.join(save_path,f'af_{location}_label_seqtoseq_l{ts_length}_w{window_size}.npy'), tokenized_label)
-            else:
-                img_array = np.nan_to_num(np.squeeze(tokenized_array).transpose((2,3,0,1)))
-                img_label = np.nan_to_num(np.squeeze(tokenized_label).transpose((2,0,1)))
-                img_label = np.repeat(img_label[:,np.newaxis,:,:], 3, axis=1)
-                img_array = img_array[:,:,np.newaxis,:,:]
-                img_label = img_label[:,:,np.newaxis,:,:]
-                print(img_array.shape)
-                print(img_label.shape)
-                np.save(os.path.join(save_path,f'af_{location}_img_seqtoseql_{1}i_{1}.npy'), img_array.astype(np.float32))
-                np.save(os.path.join(save_path,f'af_{location}_label_seqtoseql_{1}i_{1}.npy'), img_label.astype(np.float32))
+        print(location)
+        if location in ['val', 'train']:
+            root_path = f'{root_path}/dataset_{location}'
+            save_path = f'{root_path}/dataset_{location}'
+            tokenized_array = np.load(os.path.join(root_path, f'af_{location}_img_seqtoseq_alll_{ts_length}i_{interval}.npy')).transpose((0, 3, 4, 2, 1))
+            tokenized_label = np.load(os.path.join(root_path, f'af_{location}_label_seqtoseq_alll_{ts_length}i_{interval}.npy')).transpose((0, 3, 4, 2, 1))
+            tokenized_label = tokenized_label[..., 2]
+        else:
+            root_path = '/home/z/h/zhao2/CalFireMonitoring/data_train_proj2'
+            save_path = '/home/z/h/zhao2/TS-SatFire/dataset/dataset_test'
+            tokenized_array = np.load(os.path.join(root_path, f'af_{location}_img.npy')).transpose((0, 3, 4, 1, 2))
+            tokenized_label = np.load(os.path.join(root_path, f'af_{location}_label.npy')).transpose((0, 2, 3, 1))
+        if tokenized_array.shape[-2]>=ts_length:
+            array_concat = []
+            label_concat = []
+            for i in range(0, tokenized_array.shape[-2], interval):
+            # lb = (tokenized_array.shape[-2]-ts_length)//2
+            # rb = (tokenized_array.shape[-2]+ts_length)//2
+                if i+ts_length > tokenized_array.shape[-2]:
+                    array_concat.append(tokenized_array[:,:,:,tokenized_array.shape[-2]-ts_length:tokenized_array.shape[-2],:])
+                    label_concat.append(tokenized_label[:,:,:,tokenized_array.shape[-2]-ts_length:tokenized_array.shape[-2]])
+                else:
+                    array_concat.append(tokenized_array[:,:,:,i:i+ts_length,:])
+                    label_concat.append(tokenized_label[:,:,:,i:i+ts_length])
+            tokenized_array = np.concatenate(array_concat, axis=0)
+            tokenized_label = np.concatenate(label_concat, axis=0)
+            # tokenized_array = tokenized_array[:,:,:,lb:rb,:]
+            # tokenized_label = tokenized_label[:,:,:,lb:rb]
+        if usecase == 'temp':
+            print('tokenizing')
+            tokenized_array = np.nan_to_num(tokenized_array).reshape(-1,tokenized_array.shape[-2],tokenized_array.shape[-1])
+            tokenized_label = np.nan_to_num(tokenized_label).reshape(-1,tokenized_label.shape[-1])
+            print(tokenized_array.shape)
+            print(tokenized_label.shape)
+            np.save(os.path.join(save_path,f'af_{location}_img_seqtoseq_l{ts_length}_w{window_size}.npy'), tokenized_array)
+            np.save(os.path.join(save_path,f'af_{location}_label_seqtoseq_l{ts_length}_w{window_size}.npy'), tokenized_label)
+        else:
+            img_array = np.nan_to_num(tokenized_array.transpose((0,4,3,1,2)))
+            img_label = np.nan_to_num(tokenized_label.transpose((0,3,1,2)))
+            img_label = np.repeat(img_label[:,np.newaxis,:,:,:], 3, axis=1)
+            # img_array = img_array[:,:,np.newaxis,:,:]
+            # img_label = img_label[:,:,np.newaxis,:,:]
+            print(img_array.shape)
+            print(img_label.shape)
+            np.save(os.path.join(save_path,f'af_{location}_img_seqtoseql_{ts_length}i_{interval}.npy'), img_array.astype(np.float32))
+            np.save(os.path.join(save_path,f'af_{location}_label_seqtoseql_{ts_length}i_{interval}.npy'), img_label.astype(np.float32))

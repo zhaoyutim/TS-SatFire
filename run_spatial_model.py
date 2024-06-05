@@ -1,9 +1,7 @@
 import argparse
 import heapq
-import platform
 from functools import reduce
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="6,7,8,9"
 import numpy as np
 import torch
 SEED = 42
@@ -11,18 +9,17 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 from monai.losses.dice import DiceLoss
 from monai.metrics import MeanIoU, DiceMetric
-from monai.data import ArrayDataset, create_test_image_2d, decollate_batch, DataLoader
+from monai.data import create_test_image_2d, decollate_batch, DataLoader
 from monai.networks.nets import UNet, AttentionUnet, UNETR, SwinUNETR
-from monai.transforms import Activations, AsDiscrete, Compose, LoadImage, SaveImage, ScaleIntensity
+from monai.transforms import Activations, AsDiscrete, Compose
 from torch import nn, optim
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 import wandb
-from satimg_dataset_processor.data_generator_torch import FireDataset
+from satimg_dataset_processor.data_generator_torch import Normalize, FireDataset
 from sklearn.metrics import f1_score, jaccard_score
-import torchvision.transforms as transforms
 import pandas as pd
 
 root_path = '/home/z/h/zhao2/TS-SatFire/dataset/'
@@ -54,7 +51,7 @@ if __name__=='__main__':
     parser.add_argument('-nc', type=int, help='n_channel')
     parser.add_argument('-ts', type=int, help='ts_length')
     parser.add_argument('-it', type=int, help='interval')
-    parser.add_argument('-test', dest='binary_flag', action='store_true', help='embedding dimension')
+    parser.add_argument('-test', dest='binary_flag', action='store_true', help='inference on the testset')
     parser.set_defaults(binary_flag=False)
 
     args = parser.parse_args()
@@ -77,16 +74,6 @@ if __name__=='__main__':
     mode = args.mode
     top_n_checkpoints = 3
     train = args.binary_flag
-
-    class Normalize(object):
-        def __init__(self, mean, std):
-            self.mean = mean
-            self.std = std
-
-        def __call__(self, sample):
-            for i in range(len(self.mean)):
-                sample[i, :, ...] = (sample[i, :, ...] - self.mean[i]) / self.std[i]
-            return sample
         
     if mode != 'af':
         transform = Normalize(mean = [17.952442,26.94709,19.82838,317.80234,308.47693,13.87255,291.0257,288.9398],
@@ -122,7 +109,9 @@ if __name__=='__main__':
     elif model_name == 'attunet':
         model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size, hidden_size=384, mlp_dim = 1536)
+    elif model_name == 'unetr2d_half':
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size, hidden_size=384, mlp_dim = 1536)
     elif model_name == 'swinunetr2d':
         model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
     else:
@@ -204,7 +193,7 @@ if __name__=='__main__':
             wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
             print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
-            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=150:
+            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=50:
                 save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
                 if len(best_checkpoints) == top_n_checkpoints:
@@ -249,8 +238,6 @@ if __name__=='__main__':
             label_sel=[2 for i in range(len(ids))]
         f1_all = 0
         iou_all = 0
-        mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
-        dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
         for i, id in enumerate(ids):
             test_image_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_{interval}.npy')
@@ -259,7 +246,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 185
+            load_epoch = 99
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -302,7 +289,7 @@ if __name__=='__main__':
                     f1 += f1_ts
                     iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
                     iou += iou_ts
-                    plt.imshow(normalization(test_data_batch[k, 3, :, :]), cmap='Greys')
+                    plt.imshow(normalization(test_data_batch[k, 3, :, :]), cmap='gray')
                     img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
                     img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
                     img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)

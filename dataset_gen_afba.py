@@ -18,7 +18,7 @@ for year in ['2021']:
 df_test = pd.concat(dfs_test, ignore_index=True)
 
 val_ids = ['20568194', '20701026','20562846','20700973','24462610', '24462788', '24462753', '24103571', '21998313', '21751303', '22141596', '21999381', '23301962', '22712904', '22713339']
-skip_ids = ['21889672', '21889683', '21889697', '21889719', '21889734', '21889754', '21997775']
+skip_ids = ['21889672', '21889683', '21889697', '21889719', '21889734', '21889754', '21997775', '20777160', '20777163', '20777166']
 
 df = df.sort_values(by=['Id'])
 df['Id'] = df['Id'].astype(str)
@@ -64,8 +64,8 @@ if __name__ == '__main__':
         for id in locations:
             if usecase == 'ba':
                 satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, data_path='/home/z/h/zhao2/CalFireMonitoring/data/', locations=[id], visualize=False, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
-                                                            save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
+                                                        save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
             else:
                 af_test_processor = AFTestDatasetProcessor()
-                # af_test_processor.af_test_dataset_generator(id, save_path='dataset/dataset_test', file_name ='af_' + id + '_img.npy')
-                af_test_processor.af_seq_tokenizing_and_test_slicing(location=id, modes=modes, ts_length=ts_length, interval=interval, usecase='temp', root_path='/home/z/h/zhao2/TS-SatFire/dataset', save_path='/home/z/h/zhao2/TS-SatFire/dataset')
+                af_test_processor.af_test_dataset_generator(id, save_path='dataset/dataset_test', file_name ='af_' + id + '_img.npy')
+                af_test_processor.af_seq_tokenizing_and_test_slicing(location=id, modes=modes, ts_length=ts_length, interval=interval, usecase=usecase, root_path='/home/z/h/zhao2/TS-SatFire/dataset', save_path='/home/z/h/zhao2/TS-SatFire/dataset')

@@ -1,10 +1,10 @@
 import argparse
 import heapq
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="3,4,5,6"
+# os.environ["CUDA_VISIBLE_DEVICES"]="2,7,5,6"
 import numpy as np
 import torch
-SEED = 43
+SEED = 44
 print(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -270,8 +270,8 @@ if __name__=='__main__':
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             
             # Load the model checkpoint
-            load_epoch = 71
-            load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
+            load_epoch = 77
+            load_path = f"saved_models/model_{model_name}_run_{run}_seed_{SEED}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
             model.load_state_dict(checkpoint['model_state_dict'])

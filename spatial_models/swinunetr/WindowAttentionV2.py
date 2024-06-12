@@ -1,15 +1,16 @@
 from typing import Sequence
 
+import numpy as np
 import torch
 import torch.nn as nn
-from monai.networks.layers import trunc_normal_
+import torch.nn.functional as F
 
 
-class WindowAttentionV1(nn.Module):
+class WindowAttentionV2(nn.Module):
     '''
-    Liu et al.,
-    Swin Transformer: Hierarchical Vision Transformer using Shifted Windows
-    <https://arxiv.org/abs/2103.14030>
+    Window based multi-head self attention module with relative position bias based on: 'Liu et al.,
+    Swin Transformer V2: Scaling Up Capacity and Resolution
+    <https://arxiv.org/abs/2111.09883>'
     https://github.com/microsoft/Swin-Transformer
     '''
 
@@ -36,18 +37,34 @@ class WindowAttentionV1(nn.Module):
         self.dim = dim
         self.window_size = window_size
         self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = head_dim ** -0.5
         mesh_args = torch.meshgrid.__kwdefaults__
+
+        scale_params = torch.log(10 * torch.ones((num_heads, 1, 1)))
+        self.logit_scale = nn.Parameter(scale_params, requires_grad=True)
+
+        # mlp to generate continuous relative position bias
+        self.cpb_mlp = nn.Sequential(
+            nn.Linear(3, 512, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, num_heads, bias=False)
+        )
 
         if len(self.window_size) == 3:
 
-            self.relative_position_bias_table = nn.Parameter(
-                torch.zeros(
-                    (2 * self.window_size[0] - 1) * (2 * self.window_size[1] - 1) * (2 * self.window_size[2] - 1),
-                    num_heads,
-                )
-            )
+            # get relative_coords_table
+            relative_coords_d = torch.arange(-(self.window_size[0] - 1), self.window_size[0], dtype=torch.float32)
+            relative_coords_h = torch.arange(-(self.window_size[1] - 1), self.window_size[1], dtype=torch.float32)
+            relative_coords_w = torch.arange(-(self.window_size[2] - 1), self.window_size[2], dtype=torch.float32)
+            if mesh_args is not None:
+                relative_coords_table = torch.stack(torch.meshgrid(relative_coords_d, relative_coords_h, relative_coords_w, indexing='ij'))
+            else:
+                relative_coords_table = torch.stack(torch.meshgrid(relative_coords_d, relative_coords_h, relative_coords_w))
+            relative_coords_table = relative_coords_table.permute(1, 2, 3, 0).contiguous().unsqueeze(0)
+            relative_coords_table[:, :, :, 0] /= (self.window_size[0] - 1)
+            relative_coords_table[:, :, :, 1] /= (self.window_size[1] - 1)
+            relative_coords_table[:, :, :, 2] /= (self.window_size[2] - 1)
+
+            # get pair-wise relative position index for each token inside the window
             coords_d = torch.arange(self.window_size[0])
             coords_h = torch.arange(self.window_size[1])
             coords_w = torch.arange(self.window_size[2])
@@ -66,9 +83,18 @@ class WindowAttentionV1(nn.Module):
 
         elif len(self.window_size) == 2:
 
-            self.relative_position_bias_table = nn.Parameter(
-                torch.zeros((2 * window_size[0] - 1) * (2 * window_size[1] - 1), num_heads)
-            )
+            # get relative_coords_table
+            relative_coords_h = torch.arange(-(self.window_size[0] - 1), self.window_size[0], dtype=torch.float32)
+            relative_coords_w = torch.arange(-(self.window_size[1] - 1), self.window_size[1], dtype=torch.float32)
+            if mesh_args is not None:
+                relative_coords_table = torch.stack(torch.meshgrid(relative_coords_h, relative_coords_w, indexing='ij'))
+            else:
+                relative_coords_table = torch.stack(torch.meshgrid(relative_coords_h, relative_coords_w))
+            relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous().unsqueeze(0)
+            relative_coords_table[:, :, :, 0] /= (self.window_size[0] - 1)
+            relative_coords_table[:, :, :, 1] /= (self.window_size[1] - 1)
+
+            # get pair-wise relative position index for each token inside the window
             coords_h = torch.arange(self.window_size[0])
             coords_w = torch.arange(self.window_size[1])
             if mesh_args is not None:
@@ -82,26 +108,41 @@ class WindowAttentionV1(nn.Module):
             relative_coords[:, :, 1] += self.window_size[1] - 1
             relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
 
+        relative_coords_table *= 8  # normalize to -8, 8
+        relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
+            torch.abs(relative_coords_table) + 1.0) / np.log2(8)
+        self.register_buffer('relative_coords_table', relative_coords_table)
+
         relative_position_index = relative_coords.sum(-1)
         self.register_buffer('relative_position_index', relative_position_index)
+
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        trunc_normal_(self.relative_position_bias_table, std=0.02)
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x, mask):
         b, n, c = x.shape
+        device = x.device
+
         qkv = self.qkv(x).reshape(b, n, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        q = q * self.scale
-        attn = q @ k.transpose(-2, -1)
-        relative_position_bias = self.relative_position_bias_table[
+
+        # cosine attention
+        attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
+        max_scale = torch.log(torch.tensor(1.0 / 0.01, device=device))
+        logit_scale = torch.clamp(self.logit_scale, max=max_scale).exp()
+        attn = attn * logit_scale
+
+        relative_position_bias_table = self.cpb_mlp(self.relative_coords_table).view(-1, self.num_heads)
+        relative_position_bias = relative_position_bias_table[
             self.relative_position_index.clone()[:n, :n].reshape(-1)
         ].reshape(n, n, -1)
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+        relative_position_bias = 16 * torch.sigmoid(relative_position_bias)
         attn = attn + relative_position_bias.unsqueeze(0)
+        
         if mask is not None:
             nw = mask.shape[0]
             attn = attn.view(b // nw, nw, self.num_heads, n, n) + mask.unsqueeze(1).unsqueeze(0)
@@ -115,4 +156,3 @@ class WindowAttentionV1(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
-

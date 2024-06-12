@@ -15,6 +15,8 @@ from monai.networks.blocks import PatchEmbed
 from monai.networks.blocks import MLPBlock as Mlp
 from monai.networks.layers import DropPath
 from spatial_models.swinunetr.WindowAttentionV1 import WindowAttentionV1
+from spatial_models.swinunetr.WindowAttentionV2 import WindowAttentionV2
+from spatial_models.swinunetr.AutoregressiveAttention import AutoregressiveAttention
 from spatial_models.swinunetr.PatchMerging import PatchMerging
 
 class SwinTransformerBlock(nn.Module):
@@ -69,6 +71,24 @@ class SwinTransformerBlock(nn.Module):
         self.attn_version = attn_version
         if attn_version == 'v1':
             self.attn = WindowAttentionV1(
+                dim,
+                window_size = self.window_size,
+                num_heads   = num_heads,
+                qkv_bias    = qkv_bias,
+                attn_drop   = attn_drop,
+                proj_drop   = drop,
+            )
+        elif attn_version == 'v2':
+            self.attn = WindowAttentionV2(
+                dim,
+                window_size = self.window_size,
+                num_heads   = num_heads,
+                qkv_bias    = qkv_bias,
+                attn_drop   = attn_drop,
+                proj_drop   = drop,
+            )
+        elif attn_version == 'ar':
+            self.attn = AutoregressiveAttention(
                 dim,
                 window_size = self.window_size,
                 num_heads   = num_heads,

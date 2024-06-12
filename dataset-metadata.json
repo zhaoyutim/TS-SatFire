@@ -1,0 +1,43 @@
+{
+  "id": "z789456sx/ts-satfire",
+  "id_no": 5199915,
+  "datasetSlugNullable": "ts-satfire",
+  "ownerUserNullable": "z789456sx",
+  "usabilityRatingNullable": 0.6875,
+  "titleNullable": "TS-SatFire",
+  "subtitleNullable": "A Multi-Task Satellite Image Time-Series Dataset for Wildfire Detection and Pred",
+  "descriptionNullable": "We introduce a comprehensive multi-temporal remote sensing dataset covering the entire life cycle of wildfires for active fire detection, daily wildfire monitoring and next-day wildfire prediction. This multi-task dataset comprises 179 wildfire events recorded majority in the US between January 2017 and October 2021. For each wildfire, images from the beginning until the end of the wildfire are provided. It includes a total of 3552 surface reflectance images along with auxiliary data such as weather, topography, and fuel information. Labels for current active fires (AF) and burned areas (BA) are provided for each image. Manual quality assurance is performed for all AF labels and BA test labels. The dataset sets three distinct tasks: a) active fire detection, b) daily burned area mapping and c) daily wildfire progression prediction. Detection tasks, such as active fire detection and burned area mapping, require pixel-wise classification utilizing multi-spectral, multi-temporal images. Prediction tasks involve learning the underlying physical processes by integrating satellite observations with auxiliary data. The primary objective of this dataset is to stimulate further research in wildfire monitoring, particularly leveraging advanced deep learning models capable of effectively processing multi-temporal, multi-spectral images to detect fires and accurately predict fire progression. The benchmarks for detection and prediction tasks indicate that utilizing both spatial and temporal information is crucial for this dataset.",
+  "datasetId": 5199915,
+  "datasetSlug": "ts-satfire",
+  "hasDatasetSlug": true,
+  "ownerUser": "z789456sx",
+  "hasOwnerUser": true,
+  "usabilityRating": 0.6875,
+  "hasUsabilityRating": true,
+  "totalViews": 6,
+  "totalVotes": 0,
+  "totalDownloads": 0,
+  "title": "TS-SatFire",
+  "hasTitle": true,
+  "subtitle": "A Multi-Task Satellite Image Time-Series Dataset for Wildfire Detection and Pred",
+  "hasSubtitle": true,
+  "description": "We introduce a comprehensive multi-temporal remote sensing dataset covering the entire life cycle of wildfires for active fire detection, daily wildfire monitoring and next-day wildfire prediction. This multi-task dataset comprises 179 wildfire events recorded majority in the US between January 2017 and October 2021. For each wildfire, images from the beginning until the end of the wildfire are provided. It includes a total of 3552 surface reflectance images along with auxiliary data such as weather, topography, and fuel information. Labels for current active fires (AF) and burned areas (BA) are provided for each image. Manual quality assurance is performed for all AF labels and BA test labels. The dataset sets three distinct tasks: a) active fire detection, b) daily burned area mapping and c) daily wildfire progression prediction. Detection tasks, such as active fire detection and burned area mapping, require pixel-wise classification utilizing multi-spectral, multi-temporal images. Prediction tasks involve learning the underlying physical processes by integrating satellite observations with auxiliary data. The primary objective of this dataset is to stimulate further research in wildfire monitoring, particularly leveraging advanced deep learning models capable of effectively processing multi-temporal, multi-spectral images to detect fires and accurately predict fire progression. The benchmarks for detection and prediction tasks indicate that utilizing both spatial and temporal information is crucial for this dataset.",
+  "hasDescription": true,
+  "isPrivate": false,
+  "keywords": [
+    "global",
+    "united states",
+    "earth and nature",
+    "image",
+    "image segmentation"
+  ],
+  "licenses": [
+    {
+      "nameNullable": "Attribution 4.0 International (CC BY 4.0)",
+      "name": "Attribution 4.0 International (CC BY 4.0)",
+      "hasName": true
+    }
+  ],
+  "collaborators": [],
+  "data": []
+}

@@ -100,8 +100,8 @@ class SwinUNETR(nn.Module):
         # if feature_size % 4 != 0:
         #     raise ValueError('feature_size should be divisible by 4.')
 
-        if attn_version not in ['v1']:
-            raise ValueError('attn_version should be v1.')
+        if attn_version not in ['v1', 'v2', 'ar']:
+            raise ValueError('attn_version should be v1 or v2 or ar.')
 
         self.normalize = normalize
 

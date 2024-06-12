@@ -1,28 +1,27 @@
 import argparse
 import pandas as pd
-
+import os
 from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor, AFTestDatasetProcessor
 # Training set rois
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:
-    filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
+    filename = 'roi/us_fire_' + year + '_out_new.csv'
     df = pd.read_csv(filename)
     dfs.append(df)
 df = pd.concat(dfs, ignore_index=True)
 # Test set rois
 dfs_test = []
 for year in ['2021']:
-    filename = '/home/z/h/zhao2/CalFireMonitoring/roi/us_fire_' + year + '_out_new.csv'
+    filename = 'roi/us_fire_' + year + '_out_new.csv'
     df_test = pd.read_csv(filename)
     dfs_test.append(df_test)
 df_test = pd.concat(dfs_test, ignore_index=True)
 
-val_ids = ['20568194', '20701026','20562846','20700973','24462610', '24462788', '24462753', '24103571', '21998313', '21751303', '22141596', '21999381', '23301962', '22712904', '22713339']
-skip_ids = ['21889672', '21889683', '21889697', '21889719', '21889734', '21889754', '21997775', '20777160', '20777163', '20777166']
+val_ids = ['20568194', '20701026','20562846','20700973','24462610', '24462788', '24462753', '24103571', '21998313', '21751303', '22141596', '21999381', '22712904']
 
 df = df.sort_values(by=['Id'])
 df['Id'] = df['Id'].astype(str)
-train_df = df[~df.Id.isin(val_ids + skip_ids)]
+train_df = df[~df.Id.isin(val_ids)]
 val_df = df[df.Id.isin(val_ids)]
 
 train_ids = train_df['Id'].values.astype(str)

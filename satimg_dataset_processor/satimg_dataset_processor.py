@@ -144,8 +144,8 @@ class PredDatasetProcessor(SatProcessingUtils):
             os.mkdir(save_path)
         for location in locations:
             print(location)
-            data_path = data_path + location + '/' + satellite_day + '/'
-            file_list = glob(data_path + '/*.tif')
+            data_day_path = data_path + location + '/' + satellite_day + '/'
+            file_list = glob(data_day_path + '/*.tif')
             file_list.sort()
             if len(file_list) == 0:
                 print('empty file list')
@@ -191,19 +191,19 @@ class PredDatasetProcessor(SatProcessingUtils):
                         array_night = np.zeros((2, original_shape_x, original_shape_y))
                     array_pred, _ = self.read_tiff(file.replace('VIIRS_Day', 'FirePred'))
                     img = np.concatenate((array_day[:6, offset:output_shape_x+offset, offset:output_shape_y+offset], array_night[:, offset:output_shape_x+offset, offset:output_shape_y+offset], array_pred[:, offset:output_shape_x+offset, offset:output_shape_y+offset]), axis=0)
-                    img = np.nan_to_num(img[:,:output_shape_x, :output_shape_y])
+                    img = (img[:,:output_shape_x, :output_shape_y])
                     max_img = np.maximum(img, max_img)
                     img = np.concatenate((img[:3,...],max_img[3:5,...],img[[5],...],max_img[6:8,...],img[8:,...]))
                     ba_img = img[3,:,:]
                     if array_day.shape[0]==8:
-                        label = np.nan_to_num(array_day[7, :, :])
+                        label = (array_day[7, :, :])
                     else:
                         label = np.zeros((output_shape_x, output_shape_y))
                     af= array_day[6, :, :]
 
                     ba_img = (ba_img-ba_img.min())/(ba_img.max()-ba_img.min())
-                    label = np.nan_to_num(label[offset:output_shape_x+offset, offset:output_shape_y+offset])
-                    af = np.nan_to_num(af[offset:output_shape_x+offset, offset:output_shape_y+offset])
+                    label = (label[offset:output_shape_x+offset, offset:output_shape_y+offset])
+                    af = (af[offset:output_shape_x+offset, offset:output_shape_y+offset])
                     ba_label = np.logical_or(label, ba_label)
                     af_acc_label = np.logical_or(af, af_acc_label)
                     if label_sel==1:

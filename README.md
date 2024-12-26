@@ -1,5 +1,7 @@
 # TS-SatFire Time-Series Multi-Task Satellite Imagery Dataset for Wildfire Detection and Prediction
 
+Link to the paper: https://doi.org/10.48550/arXiv.2412.11555
+
 ## Repo Structure
     .
     ├── figures                                   # Analysis file for VIIRS Band I4 Data
@@ -27,8 +29,8 @@ We introduce a comprehensive multi-temporal remote sensing dataset covering the 
 
 
 ## Preparing the dataset
-The dataset in GeoTIFF format can be downloaded from the Google Gdrive link below:
-[https://drive.google.com/drive/folders/1ea49dNLa7gqtOTIJ5FCiDExWTFRa7gNQ?usp=sharing]
+The dataset in GeoTIFF format can be downloaded from the Kaggle link below:
+[[https://drive.google.com/drive/folders/1ea49dNLa7gqtOTIJ5FCiDExWTFRa7gNQ?usp=sharing](https://www.kaggle.com/datasets/z789456sx/ts-satfire)]
 
 Prepare the environment
 ```

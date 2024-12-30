@@ -4,6 +4,7 @@ from functools import reduce
 import os
 import numpy as np
 import torch
+import time
 SEED = 42
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -52,6 +53,7 @@ if __name__=='__main__':
     parser.add_argument('-ts', type=int, help='ts_length')
     parser.add_argument('-it', type=int, help='interval')
     parser.add_argument('-test', dest='binary_flag', action='store_true', help='inference on the testset')
+    parser.add_argument('-epoch', type=int, help='Load Epoch', default=0, nargs='?')
     parser.set_defaults(binary_flag=False)
 
     args = parser.parse_args()
@@ -109,11 +111,11 @@ if __name__=='__main__':
     elif model_name == 'attunet':
         model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
     elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size, hidden_size=384, mlp_dim = 1536)
+        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
     elif model_name == 'unetr2d_half':
         model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size, hidden_size=384, mlp_dim = 1536)
     elif model_name == 'swinunetr2d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
+        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, feature_size=48, norm_name='batch')
     else:
         raise 'not implemented'
     
@@ -246,7 +248,7 @@ if __name__=='__main__':
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = 99
+            load_epoch = args.epoch
             load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
             checkpoint = torch.load(load_path)
@@ -271,7 +273,13 @@ if __name__=='__main__':
                 test_data_batch = torch.reshape(test_data_batch, (b, c, w, h))
                 test_labels_batch = torch.reshape(test_labels_batch, (b, num_classes, w, h))
 
+                st = time.time()
                 outputs = model(test_data_batch.to(device))
+                et = time.time()
+                elapsed_time = et - st
+                if j == 0 and i ==0:
+                    print('Execution time:', elapsed_time, 'seconds')
+
                 outputs = [post_trans(i) for i in decollate_batch(outputs)]
                 outputs = np.stack(outputs, axis=0)
 

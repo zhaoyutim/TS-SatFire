@@ -46,7 +46,8 @@ if __name__ == '__main__':
         locations = val_ids
     else:
         if usecase == 'ba':
-            locations = test_ids
+            # locations = test_ids
+            locations = ['HWF036', 'HWF030', 'GWF027WWF023', 'SWF060', 'SWF068']
         else:
             locations = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire','sparks_lake_fire', 'lytton_fire', 
                         'chuckegg_creek_fire', 'swedish_fire', 'sydney_fire', 'thomas_fire', 'tubbs_fire', 
@@ -63,7 +64,7 @@ if __name__ == '__main__':
         for id in locations:
             if usecase == 'ba':
                 satimg_processor.dataset_generator_seqtoseq(mode = 'test', usecase=usecase, data_path='/home/z/h/zhao2/CalFireMonitoring/data/', locations=[id], visualize=False, file_name=usecase+'_'+id+'_img_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy', label_name=usecase+'_'+id+'_label_seqtoseql_'+str(ts_length)+'i_'+str(interval)+'.npy',
-                                                        save_path='dataset/dataset_test', ts_length=ts_length, interval=ts_length, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
+                                                        save_path='dataset/dataset_test', ts_length=ts_length, interval=interval, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
             else:
                 af_test_processor = AFTestDatasetProcessor()
                 af_test_processor.af_test_dataset_generator(id, save_path='dataset/dataset_test', file_name ='af_' + id + '_img.npy')

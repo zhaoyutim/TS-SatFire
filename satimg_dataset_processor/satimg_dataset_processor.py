@@ -76,9 +76,9 @@ class AFBADatasetProcessor(SatProcessingUtils):
                         raise "no support usecase"
                     ba_img = np.concatenate(([img[[5],:,:], img[[1],:,:], img[[0],:,:]]))
                     if array_day.shape[0]==8:
-                        label = np.nan_to_num(array_day[7, :, :])
+                        label = np.nan_to_num(array_day[7, :, :], nan=-1)
                     else:
-                        label = np.zeros((output_shape_x, output_shape_y))
+                        label = np.zeros((original_shape_x, original_shape_y))
                     af= array_day[6, :, :]
 
                     ba_img = ba_img/40
@@ -90,7 +90,7 @@ class AFBADatasetProcessor(SatProcessingUtils):
                         new_base_acc_label = af_acc_label
                         new_base_ba_label = ba_label
                     output_array[j, :n_channels, :, :] = img
-                    output_label[j, 0, :, :] = np.logical_or(af_acc_label, ba_label)
+                    output_label[j, 0, :, :] = label
                     output_label[j, 1, :, :] = af_acc_label
                     output_label[j, 2, :, :] = af
                     if visualize:
@@ -107,7 +107,7 @@ class AFBADatasetProcessor(SatProcessingUtils):
                         plt.title('AF')
                         plt.subplot(133)
                         plt.imshow(ba_img.transpose((1,2,0)))
-                        plt.imshow(np.where(ba_label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1, vmin=0, vmax=1)
+                        plt.imshow(np.where(label==0, np.nan, 1), cmap='hsv', interpolation='nearest', alpha=1, vmin=0, vmax=1)
                         plt.axis('off')
                         plt.title('BA')
                         plt.savefig(save_path+'_figure/'+location+'_sequence_'+str(i)+'_time_'+str(j)+'_ts_'+str(ts_length)+'_comb.png', bbox_inches='tight')

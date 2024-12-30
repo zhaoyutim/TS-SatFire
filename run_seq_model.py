@@ -22,7 +22,6 @@ import matplotlib.pyplot as plt
 import wandb
 from temporal_models.gru.gru_model import GRUModel
 from temporal_models.lstm.lstm_model import LSTMModel
-from temporal_models.tcn.tcn import compiled_tcn
 from temporal_models.t4fire import t4fire
 from sklearn.metrics import f1_score, jaccard_score
 root_path = '/home/z/h/zhao2/TS-SatFire/dataset/'
@@ -108,17 +107,6 @@ if __name__=='__main__':
     elif model_name == 'lstm_custom':
         lstm = LSTMModel(input_shape, num_classes)
         model = lstm.get_model_custom(input_shape, num_classes, num_layers, hidden_size)
-    elif model_name=='tcn':
-        model = compiled_tcn(return_sequences=True,
-                            num_feat=input_shape[-1],
-                            num_classes=num_classes,
-                            nb_filters=mlp_dim,
-                            kernel_size=hidden_size,
-                            dilations=[2 ** i for i in range(9)],
-                            nb_stacks=num_layers,
-                            max_len=input_shape[0],
-                            use_weight_norm=True,
-                            use_skip_connections=True)
     else:
         raise('no suport model')
 
@@ -142,7 +130,7 @@ if __name__=='__main__':
         locations = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire', 'sparks_lake_fire', 'lytton_fire', 
                      'chuckegg_creek_fire', 'swedish_fire','sydney_fire', 'thomas_fire', 'tubbs_fire', 'carr_fire', 'camp_fire',
                     'creek_fire', 'blue_ridge_fire', 'dixie_fire', 'mosquito_fire', 'calfcanyon_fire']
-        for train_test in locations:
+        for idx, train_test in enumerate(locations):
             data_gen_test = FireDataGenerator(mode, train_test=train_test, ts_length=ts_length, interval=interval, batch_size=batch_size, input_shape=input_shape, n_channels=nchannel, n_classes=num_classes, shuffle=False)
             output_stack = []
             origin_stack = []
@@ -150,10 +138,15 @@ if __name__=='__main__':
             f1=0
             iou=0
             test_bar = tqdm(data_gen_test, total=len(data_gen_test))
+            st = time.time()
             for step, (x_batch_test, y_batch_test) in enumerate(test_bar):
                 output_stack.append(model.predict(x_batch_test))
                 origin_stack.append(x_batch_test)
                 label_stack.append(y_batch_test)
+            et = time.time()
+            elapsed_time = et - st
+            if idx == 0:
+                print('Execution time:', elapsed_time, 'seconds')
             output = np.concatenate(output_stack).reshape(256,256,ts_length,2)>0.5
             origin = np.concatenate(origin_stack).reshape(256,256,ts_length,nchannel)
             label = np.concatenate(label_stack).reshape(256,256,ts_length,2)>0.5

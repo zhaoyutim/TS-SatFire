@@ -1,6 +1,8 @@
 import argparse
 import heapq
 import os
+import time
+# os.environ["CUDA_VISIBLE_DEVICES"]="6,7,8,9"
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('-m', type=str, help='Model to be executed')
 parser.add_argument('-mode', type=str, help='BA or Pred')
@@ -15,6 +17,7 @@ parser.add_argument('-nc', type=int, help='n_channel')
 parser.add_argument('-ts', type=int, help='ts_length')
 parser.add_argument('-it', type=int, help='interval')
 parser.add_argument('-test', dest='binary_flag', action='store_true', help='inference on the testset')
+parser.add_argument('-epoch', type=int, help='Load Epoch', default=0, nargs='?')
 parser.set_defaults(binary_flag=False)
 
 args = parser.parse_args()
@@ -250,6 +253,14 @@ else:
         df = pd.concat(dfs, ignore_index=True)
         ids = df['Id'].values.astype(str)
         label_sel = df['label_sel'].values.astype(int)
+        # dfs=[]
+        # for year in ['2023']:
+        #     filename = '~/CalFireMonitoring/roi/us_fire_' + year + '_out_small.csv'
+        #     df = pd.read_csv(filename)
+        #     dfs.append(df)
+        # df = pd.concat(dfs, ignore_index=True)
+        # ids = df['Id'].values.astype(str)
+        # label_sel = [0 for i in range(len(ids))]
     else:
         ids = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire', 'sparks_lake_fire', 'lytton_fire', 'chuckegg_creek_fire', 'swedish_fire',
                 'sydney_fire', 'thomas_fire', 'tubbs_fire', 'carr_fire', 'camp_fire',
@@ -270,8 +281,8 @@ else:
         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
         # Load the model checkpoint
-        load_epoch = 71
-        load_path = f"saved_models/model_{model_name}_run_{run}_seed_{SEED}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}_attention_{attn_version}_seed_{SEED}.pth"
+        load_epoch = args.epoch
+        load_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth"
 
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -293,22 +304,34 @@ else:
             test_labels_batch = batch['labels']
 
             # test_data_batch[:,7,:,:,:] = 0
-
+            st = time.time()
             outputs = model(test_data_batch.to(device))
+            et = time.time()
+            elapsed_time = et - st
+            if j == 0 and i ==0:
+                print('Execution time:', elapsed_time, 'seconds')
             outputs = [post_trans(i) for i in decollate_batch(outputs)]
             outputs = np.stack(outputs, axis=0)
             import matplotlib.pyplot as plt
             length += test_data_batch.shape[0] * ts_length
             for k in range(test_data_batch.shape[0]):
                 for i in range(ts_length):
+                    # if i != ts_length-1:
+                    #     continue
                     output_ti = outputs[k, 1, i, :, :]>0.5
-                    label = test_labels_batch[k, 1, i, :, :]>0
+                    label = test_labels_batch[k, 1, i, :, :]
+                    af_label = test_labels_batch[k, 0, i, :, :]
                     label = label.numpy()
-
+                    af_label = af_label.numpy()
+                    output_ti = np.where(label==-1, 0, output_ti)
+                    af_label = np.where(label==-1, 0, af_label)
+                    label = label>0
                     f1_ts = f1_score(label.flatten(), output_ti.flatten(), zero_division=1.0)
                     f1 += f1_ts
                     iou_ts = jaccard_score(label.flatten(), output_ti.flatten(), zero_division=1.0)
                     iou += iou_ts
+                    # if f1_ts!=0.0:
+                    #     print(f1_ts, iou_ts, f1_score(label.flatten(), af_label.flatten(), zero_division=1.0), jaccard_score(label.flatten(), af_label.flatten(), zero_division=1.0))
                     
                     plt.imshow(normalization(test_data_batch[k, 3, i, :, :]), cmap='gray')
                     img_tp = np.where(np.logical_and(output_ti==1, label==1), 1.0, 0.)
@@ -328,8 +351,9 @@ else:
                     plt.close()
         iou_all += iou/length
         f1_all += f1/length
-        print('ID{} IoU Score of the whole TS:{}'.format(id, iou/length))
-        print('ID{} F1 Score of the whole TS:{}'.format(id, f1/length))
+        # print('ID{} IoU Score of the whole TS:{}'.format(id, iou/length))
+        # print('ID{} F1 Score of the whole TS:{}'.format(id, f1/length))
+        print('{},{},{}'.format(id, f1/length, iou/length))
     print('model F1 Score: {} and iou score: {}'.format(f1_all/len(ids), iou_all/len(ids)))
 
 

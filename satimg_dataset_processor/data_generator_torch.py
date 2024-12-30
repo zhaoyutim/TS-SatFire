@@ -76,8 +76,8 @@ class FireDataset(Dataset):
         y_dataset = np.zeros((2, self.ts_length, 256,256))
         # y_dataset = np.where(label_dataset > 0, 1, 0)
         # y_dataset = np.where(af_dataset > 0, 2, y_dataset)
-        y_dataset[0, :, :, :] = label_dataset[..., :] == 0
-        y_dataset[1, :, :, :] = label_dataset[..., :] > 0
+        y_dataset[0, :, :, :] = label_chunk[1, :, :, :] > 0
+        y_dataset[1, :, :, :] = label_dataset[..., :]
 
         x_array, y_array = img_dataset, y_dataset
         x_array_copy = x_array.copy()

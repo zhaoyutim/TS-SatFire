@@ -274,7 +274,7 @@ dependencies:
   - libstdcxx-ng=14.2.0=h4852527_1
   - libtasn1=4.19.0=h5eee18b_0
   - libthrift=0.20.0=h0e7cc3e_1
-  - libtiff=4.7.0=h6565414_0
+  - libtiff=4.6.0
   - libunistring=0.9.10=h27cfd23_0
   - libutf8proc=2.8.0=h166bdaf_0
   - libuuid=2.38.1=h0b41bf4_0

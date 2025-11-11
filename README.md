@@ -30,7 +30,7 @@ We introduce a comprehensive multi-temporal remote sensing dataset covering the 
 
 ## Preparing the dataset
 The dataset in GeoTIFF format can be downloaded from the Kaggle link below:
-[[https://drive.google.com/drive/folders/1ea49dNLa7gqtOTIJ5FCiDExWTFRa7gNQ?usp=sharing](https://www.kaggle.com/datasets/z789456sx/ts-satfire)]
+[[https://www.kaggle.com/datasets/z789456sx/ts-satfire](https://www.kaggle.com/datasets/z789456sx/ts-satfire)]
 
 Prepare the environment
 ```

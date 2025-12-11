@@ -1,6 +1,6 @@
 # TS-SatFire Time-Series Multi-Task Satellite Imagery Dataset for Wildfire Detection and Prediction
 
-Link to the paper: https://doi.org/10.48550/arXiv.2412.11555
+🔥This paper has been accepted in Nature Scientific Data! Link:[[https://www.nature.com/articles/s41597-025-06271-3]]
 
 ## Repo Structure
     .
@@ -53,7 +53,7 @@ python run_spatial_temp_model.py -m <model name> -mode <af/ba> -b <batch size> -
 
 ## Author
 
-#### Yu Zhao (zhao2@kth.se), Sebastian Gerard(sgerard@kth.se), Yifang Ban (yifang@kth.se), KTH Royal Institute of Technology, Stockholm, Sweden
+#### Yu Zhao (zhaoyutim@gmail.com), Sebastian Gerard(sgerard@kth.se), Yifang Ban (yifang@kth.se), KTH Royal Institute of Technology, Stockholm, Sweden
 
 ## Acknowledgement
 #### The research is part of the project ‘Sentinel4Wildfire’ funded by Formas, the Swedish research council for sustainable development and the project ‘EO-AI4Global Change’ funded by Digital Futures.
